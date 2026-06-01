@@ -534,6 +534,24 @@
     <h3 id="stats-optable-title">By operation &mdash; all ops</h3>
     <table class="op-table" id="stats-optable"></table>
     <div class="muted" id="stats-summary" style="font-size:13px;margin-top:10px;"></div>
+
+    <h3>Backup &amp; restore</h3>
+    <button class="csv-btn" id="btn-backup">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>Back up everything</button>
+    <button class="csv-btn alt" id="btn-restore">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>Restore from backup</button>
+    <input type="file" id="backup-file" accept="application/json,.json" hidden>
+    <div class="muted" style="font-size:12px;margin-top:8px;text-align:center;">One file with <b>everything</b> &mdash; games, stats, XP, streak &amp; freezes. Save it to Files / iCloud Drive and you can restore after a reinstall or on a new device.</div>
+
+    <h3>Spreadsheet export</h3>
     <button class="csv-btn" id="btn-csv">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -547,7 +565,7 @@
         <line x1="12" y1="3" x2="12" y2="15"/>
       </svg>Import CSV</button>
     <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
-    <div class="muted" style="font-size:12px;margin-top:8px;text-align:center;">Restoring a backup? Import only adds games you don&rsquo;t already have &mdash; it never overwrites or deletes.</div>
+    <div class="muted" style="font-size:12px;margin-top:8px;text-align:center;">Per-problem data for spreadsheets. Import only adds games you don&rsquo;t already have &mdash; it never overwrites or deletes.</div>
   </div>
 </div>
 
@@ -625,7 +643,8 @@ const { dayKey, parseKey, addDays, canonFact, factKey, answerFor,
         defaultProgress, normalizeProgress, xpForSession, awardXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt,
         masteryBaseline, masteryGrid, opStats, computeWeakFacts, genProblem, OP_ORDER,
-        buildGauntlet, gauntletStreak, recordGauntletClear, parseCSV, buildImport,
+        buildGauntlet, gauntletStreak, recordGauntletClear,
+        parseCSV, buildImport, parseBackup, mergeProgress,
         DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD } = Z;
 
 /* ---------- IndexedDB storage ---------- */
@@ -1702,6 +1721,32 @@ function readFileText(file){
     r.readAsText(file);
   });
 }
+/* shared non-destructive merge for CSV import AND backup restore: adds only
+   sessionIds we don't already have, plus gauntlet/loose problems for sessionIds
+   with no existing problems. Idempotent; returns counts; throws on storage error. */
+async function mergeIntoStore(parsed){
+  const haveSession=new Set((await Store.getSessions()).map(s=>s.sessionId));
+  const haveProblemSid=new Set((await Store.getProblems()).map(p=>p.sessionId));
+  const sessionsToAdd=[], problemsToAdd=[];
+  let addedGames=0;
+  for(const s of parsed.sessions){
+    if(haveSession.has(s.sessionId)) continue;             // already have this game — skip, don't overwrite
+    const problems=s.problems||[], session=Object.assign({},s); delete session.problems;
+    sessionsToAdd.push(session);
+    for(const p of problems) problemsToAdd.push(p);
+    addedGames++;
+  }
+  const looseBySid={};
+  for(const p of (parsed.looseProblems||[])){ (looseBySid[p.sessionId]=looseBySid[p.sessionId]||[]).push(p); }
+  for(const sid in looseBySid){
+    if(haveProblemSid.has(sid)) continue;                  // gauntlet problems already present
+    for(const p of looseBySid[sid]) problemsToAdd.push(p);
+  }
+  for(const s of sessionsToAdd) await Store.addSession(s);
+  await Store.addProblems(problemsToAdd);
+  return {games:addedGames, problems:problemsToAdd.length};
+}
+
 async function importCSVFile(file){
   let text;
   try{ text=await readFileText(file); }
@@ -1711,41 +1756,63 @@ async function importCSVFile(file){
   catch(err){ console.error('import: parse failed',err); toast('That file isn’t a valid CSV'); return; }
   if(!parsed.ok){ toast(parsed.error||'Unrecognized CSV'); return; }
   if(!parsed.sessions.length && !parsed.looseProblems.length){ toast('No games found in that CSV'); return; }
-
-  let existingSessions, existingProblems;
-  try{
-    existingSessions=await Store.getSessions();
-    existingProblems=await Store.getProblems();
-  }catch(err){ console.error('import: read store failed',err); toast('Storage unavailable — import aborted'); return; }
-  const haveSession=new Set(existingSessions.map(s=>s.sessionId));
-  const haveProblemSid=new Set(existingProblems.map(p=>p.sessionId));
-
-  const sessionsToAdd=[], problemsToAdd=[];
-  let addedGames=0;
-  for(const s of parsed.sessions){
-    if(haveSession.has(s.sessionId)) continue;             // already have this game — skip, don't overwrite
-    const problems=s.problems, session=Object.assign({},s); delete session.problems;
-    sessionsToAdd.push(session);
-    for(const p of problems) problemsToAdd.push(p);
-    addedGames++;
-  }
-  const looseBySid={};
-  for(const p of parsed.looseProblems){ (looseBySid[p.sessionId]=looseBySid[p.sessionId]||[]).push(p); }
-  for(const sid in looseBySid){
-    if(haveProblemSid.has(sid)) continue;                  // gauntlet problems already present
-    for(const p of looseBySid[sid]) problemsToAdd.push(p);
-  }
-
-  if(!sessionsToAdd.length && !problemsToAdd.length){ toast('Already imported — nothing new'); return; }
-  try{
-    for(const s of sessionsToAdd) await Store.addSession(s);
-    await Store.addProblems(problemsToAdd);
-  }catch(err){ console.error('import: write failed',err); toast('Import failed while saving'); return; }
-
+  let added;
+  try{ added=await mergeIntoStore(parsed); }
+  catch(err){ console.error('import: write failed',err); toast('Import failed — storage error'); return; }
+  if(!added.games && !added.problems){ toast('Already imported — nothing new'); return; }
   await renderHome().catch(err=>console.error('import: renderHome failed',err));
   if($('sheet-stats').classList.contains('open')) renderStats();
   const extra=parsed.skipped?(' · '+parsed.skipped+' rows skipped'):'';
-  toast('Imported '+addedGames+' game'+(addedGames===1?'':'s')+' · '+problemsToAdd.length+' problems'+extra);
+  toast('Imported '+added.games+' game'+(added.games===1?'':'s')+' · '+added.problems+' problems'+extra);
+}
+
+/* ---- complete backup (JSON): games + problems + progress (XP/freezes/streak) ----
+   The CSV is per-problem only; this snapshot captures everything so a restore is
+   total. Problems drop their autoincrement id so a restore never collides with
+   ids assigned by games played since the backup. */
+async function downloadBackup(){
+  let sessions, problems, prog;
+  try{
+    sessions=await Store.getSessions();
+    problems=(await Store.getProblems()).map(p=>{ const q=Object.assign({},p); delete q.id; return q; });
+    prog=await Store.getProgress();
+  }catch(err){ console.error('backup: read failed',err); toast('Could not read your data'); return; }
+  const data={type:'reckon-backup',version:1,exportedAt:new Date().toISOString(),
+    sessions,problems,progress:prog||progress};
+  const url=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
+  const a=document.createElement('a');
+  a.href=url; a.download='reckon-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+  toast('Backed up '+sessions.length+' game'+(sessions.length===1?'':'s')+' + progress');
+}
+
+/* restore a complete backup: merge games/problems (non-destructive) AND restore
+   progress (XP / freezes / streak-freezes / gauntlet) via the keep-the-better merge */
+async function restoreBackupFile(file){
+  let text;
+  try{ text=await readFileText(file); }
+  catch(err){ console.error('restore: read failed',err); toast('Could not read that file'); return; }
+  let parsed;
+  try{ parsed=parseBackup(text); }
+  catch(err){ console.error('restore: parse failed',err); toast('Invalid backup file'); return; }
+  if(!parsed.ok){ toast(parsed.error||'Not a Reckon backup'); return; }
+  let added;
+  try{ added=await mergeIntoStore(parsed); }
+  catch(err){ console.error('restore: write failed',err); toast('Restore failed — storage error'); return; }
+  let progRestored=false;
+  if(parsed.progress){
+    try{
+      progress=mergeProgress(await Store.getProgress(),parsed.progress);
+      await Store.saveProgress(progress);
+      progRestored=true;
+    }catch(err){ console.error('restore: progress save failed',err); }
+  }
+  await renderHome().catch(err=>console.error('restore: renderHome failed',err));
+  if($('sheet-stats').classList.contains('open')) renderStats();
+  if(added.games||added.problems) toast('Restored '+added.games+' game'+(added.games===1?'':'s')+(progRestored?' + XP/streak':''));
+  else if(progRestored) toast('Backup already present — XP/streak refreshed');
+  else toast('Nothing new to restore');
 }
 
 /* ===================================================================
@@ -1766,6 +1833,9 @@ $('streak-card').addEventListener('click',e=>{ if(e.target.closest('#btn-buy-fre
 $('btn-csv').addEventListener('click',downloadCSV);
 $('btn-import').addEventListener('click',()=>$('csv-file').click());
 $('csv-file').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importCSVFile(f); });
+$('btn-backup').addEventListener('click',downloadBackup);
+$('btn-restore').addEventListener('click',()=>$('backup-file').click());
+$('backup-file').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) restoreBackupFile(f); });
 $('stats-period').addEventListener('click',e=>{
   const b=e.target.closest('[data-period]'); if(!b) return;
   statsPeriod=b.dataset.period; renderStats();
@@ -1822,6 +1892,13 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(()=>{});
   });
+}
+
+/* ask the browser to keep our IndexedDB from being evicted under storage
+   pressure / Safari's 7-day cap. This canNOT survive deleting the home-screen
+   app on iOS — that's what Statistics → "Back up everything" is for. */
+if(navigator.storage&&navigator.storage.persist){
+  navigator.storage.persisted().then(p=>p?null:navigator.storage.persist()).catch(()=>{});
 }
 
 /* show the build version on the home screen */

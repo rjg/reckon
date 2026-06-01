@@ -493,6 +493,64 @@
     return { ok: true, error: '', sessions, looseProblems, imported, skipped };
   }
 
+  /* ---- complete backup (JSON) ----
+     Unlike the CSV (per-problem only), a backup is a full snapshot: sessions,
+     problems AND the progress record (XP / freezes / streak-freezes / gauntlet
+     clears) that the CSV never carried. parseBackup validates a backup blob and
+     returns it in the same {sessions, looseProblems} shape the CSV import uses
+     (so the IndexedDB merge is shared), plus a normalized progress. Sessions
+     keep their stored score/rate/config verbatim — nothing is re-derived. */
+  function parseBackup(text) {
+    let obj;
+    try { obj = typeof text === 'string' ? JSON.parse(text) : text; }
+    catch (e) { return { ok: false, error: 'Not valid JSON', sessions: [], looseProblems: [], progress: null, imported: 0, skipped: 0 }; }
+    if (!obj || typeof obj !== 'object' || !Array.isArray(obj.sessions) || !Array.isArray(obj.problems))
+      return { ok: false, error: 'Not a Reckon backup', sessions: [], looseProblems: [], progress: null, imported: 0, skipped: 0 };
+
+    const isOp = op => op === PLUS || op === MINUS || op === TIMES || op === DIV;
+    const int = (v, d) => { const x = Number(v); return Number.isFinite(x) ? Math.round(x) : (d == null ? null : d); };
+    const probsBySid = {};
+    let imported = 0, skipped = 0;
+    for (const p of obj.problems) {
+      const sid = p && p.sessionId != null ? String(p.sessionId).trim() : '';
+      const o1 = int(p && p.operand1), o2 = int(p && p.operand2), ca = int(p && p.correctAnswer);
+      if (!sid || !isOp(p.operation) || o1 === null || o2 === null || ca === null) { skipped++; continue; }
+      (probsBySid[sid] = probsBySid[sid] || []).push({
+        sessionId: sid, timestamp: int(p.timestamp, 0), operation: p.operation,
+        operand1: o1, operand2: o2, correctAnswer: ca, userAnswer: int(p.userAnswer, ca),
+        wasCorrect: !!p.wasCorrect, msToAnswer: Math.max(0, int(p.msToAnswer, 0)),
+      });
+      imported++;
+    }
+    const sessions = [], used = new Set();
+    for (const s of obj.sessions) {
+      const sid = s && s.sessionId != null ? String(s.sessionId).trim() : '';
+      if (!sid || used.has(sid)) continue;
+      used.add(sid);
+      sessions.push(Object.assign({}, s, { sessionId: sid, problems: probsBySid[sid] || [] }));
+    }
+    const looseProblems = [];
+    for (const sid in probsBySid) if (!used.has(sid)) for (const p of probsBySid[sid]) looseProblems.push(p);
+    return { ok: true, error: '', sessions, looseProblems, progress: normalizeProgress(obj.progress), imported, skipped };
+  }
+
+  /* Non-destructive progress merge: keep the better of each side, so restoring a
+     backup never lowers XP/freezes or drops a freeze-day or a faster gauntlet. */
+  function mergeProgress(cur, inc) {
+    cur = normalizeProgress(cur); inc = normalizeProgress(inc);
+    const freezeDays = Object.assign({}, cur.freezeDays);
+    for (const k in inc.freezeDays) if (inc.freezeDays[k]) freezeDays[k] = true;
+    const gauntletClears = Object.assign({}, cur.gauntletClears);
+    for (const k in inc.gauntletClears) {
+      const v = inc.gauntletClears[k];
+      if (gauntletClears[k] == null || v < gauntletClears[k]) gauntletClears[k] = v;
+    }
+    return {
+      xp: Math.max(cur.xp, inc.xp), xpLifetime: Math.max(cur.xpLifetime, inc.xpLifetime),
+      freezes: Math.max(cur.freezes, inc.freezes), freezeDays, gauntletClears, v: 1,
+    };
+  }
+
   return {
     PLUS, MINUS, TIMES, DIV, OP_ORDER,
     DAILY_GOAL, FREEZE_COST, MAX_FREEZES,
@@ -505,6 +563,6 @@
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     opStats, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear,
-    parseCSV, buildImport,
+    parseCSV, buildImport, parseBackup, mergeProgress,
   };
 });

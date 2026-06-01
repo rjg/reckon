@@ -515,3 +515,45 @@ test('buildImport maps columns by name and rejects a non-Reckon CSV', () => {
   assert.equal(bad.ok, false);
   assert.match(bad.error, /Reckon CSV/);
 });
+
+/* ===================== complete backup (JSON) ===================== */
+test('parseBackup groups problems under sessions, isolates loose ones, normalizes progress', () => {
+  const backup = {
+    type: 'reckon-backup', version: 1,
+    sessions: [{ sessionId: 'A', score: 2, rate: 0.5, config: { ops: { add: true } } }],
+    problems: [
+      { sessionId: 'A', operation: PLUS, operand1: 7, operand2: 8, correctAnswer: 15, userAnswer: 15, wasCorrect: true, msToAnswer: 1200, timestamp: 111 },
+      { sessionId: 'G', operation: DIV, operand1: 56, operand2: 7, correctAnswer: 8, userAnswer: 8, wasCorrect: true, msToAnswer: 900, timestamp: 222 },  // no session -> loose
+      { sessionId: 'A', operation: 'bogus', operand1: 1, operand2: 2, correctAnswer: 3 },  // bad op -> skipped
+    ],
+    progress: { xp: 40, xpLifetime: 90, freezes: 1, freezeDays: { '2026-05-20': true }, gauntletClears: { '2026-05-20': 25000 } },
+  };
+  const res = Z.parseBackup(JSON.stringify(backup));
+  assert.equal(res.ok, true);
+  assert.equal(res.sessions.length, 1);
+  assert.equal(res.sessions[0].score, 2);                 // stored fields kept verbatim
+  assert.equal(res.sessions[0].problems.length, 1);
+  assert.equal(res.looseProblems.length, 1);
+  assert.equal(res.looseProblems[0].operation, DIV);
+  assert.equal(res.skipped, 1);
+  assert.deepEqual(res.progress.freezeDays, { '2026-05-20': true });
+  assert.equal(res.progress.freezes, 1);
+
+  assert.equal(Z.parseBackup('not json').ok, false);
+  assert.equal(Z.parseBackup(JSON.stringify({ sessions: [] })).ok, false);   // missing problems[]
+});
+
+test('mergeProgress keeps the better of each side (non-destructive)', () => {
+  const cur = { xp: 100, xpLifetime: 100, freezes: 0, freezeDays: { d1: true }, gauntletClears: { day: 30000 } };
+  const inc = { xp: 40, xpLifetime: 250, freezes: 2, freezeDays: { d2: true }, gauntletClears: { day: 25000, day2: 9000 } };
+  const m = Z.mergeProgress(cur, inc);
+  assert.equal(m.xp, 100);                 // max
+  assert.equal(m.xpLifetime, 250);         // max
+  assert.equal(m.freezes, 2);              // max (within cap)
+  assert.deepEqual(m.freezeDays, { d1: true, d2: true });        // union
+  assert.deepEqual(m.gauntletClears, { day: 25000, day2: 9000 }); // best (min ms) per day
+  // restoring into an empty profile adopts the backup's values
+  const fresh = Z.mergeProgress(null, inc);
+  assert.equal(fresh.xpLifetime, 250);
+  assert.equal(fresh.freezes, 2);
+});
