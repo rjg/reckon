@@ -99,6 +99,9 @@
     display:flex;align-items:center;gap:10px;margin:0 16px 16px;padding:11px 13px;
     background:#eef4ff;border:1px solid #d6e4ff;border-radius:12px;
   }
+  /* the display:flex above would otherwise defeat the `hidden` attribute,
+     leaving an empty blue box when the nudge is dismissed/backed up */
+  .backup-nudge[hidden]{display:none;}
   .backup-nudge .bn-ico{display:inline-flex;color:var(--blue);flex:0 0 auto;}
   .backup-nudge .bn-body{flex:1;min-width:0;}
   .backup-nudge .bn-title{font-size:14px;font-weight:600;}
