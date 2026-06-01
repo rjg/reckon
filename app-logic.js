@@ -551,6 +551,18 @@
     };
   }
 
+  /* Nudge to back up when there are games played since the last backup and it's
+     been a while — but not while a dismissal snooze is still active. Pure: the
+     caller passes `now`, the staleness window, and the stored backup state. */
+  function shouldBackupNudge(sessions, state, now, staleMs) {
+    state = state || {};
+    if (!sessions || !sessions.length) return false;
+    if (state.snoozeUntil && now < state.snoozeUntil) return false;
+    const last = state.lastBackupAt || 0;
+    const hasUnbacked = sessions.some(s => new Date(s.endedAt).getTime() > last);
+    return hasUnbacked && (now - last) >= staleMs;   // last=0 (never) is always stale
+  }
+
   return {
     PLUS, MINUS, TIMES, DIV, OP_ORDER,
     DAILY_GOAL, FREEZE_COST, MAX_FREEZES,
@@ -563,6 +575,6 @@
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     opStats, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear,
-    parseCSV, buildImport, parseBackup, mergeProgress,
+    parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge,
   };
 });

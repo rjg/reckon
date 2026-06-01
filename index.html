@@ -94,6 +94,25 @@
   .streak-count{font-size:13.5px;font-weight:600;margin-left:auto;}
   .streak-count.done{color:var(--green);}
 
+  /* backup nudge banner */
+  .backup-nudge{
+    display:flex;align-items:center;gap:10px;margin:0 16px 16px;padding:11px 13px;
+    background:#eef4ff;border:1px solid #d6e4ff;border-radius:12px;
+  }
+  .backup-nudge .bn-ico{display:inline-flex;color:var(--blue);flex:0 0 auto;}
+  .backup-nudge .bn-body{flex:1;min-width:0;}
+  .backup-nudge .bn-title{font-size:14px;font-weight:600;}
+  .backup-nudge .bn-sub{font-size:12px;color:var(--muted);}
+  .backup-nudge .bn-act{
+    background:var(--blue);color:#fff;font-size:13px;font-weight:600;
+    padding:7px 12px;border-radius:9px;white-space:nowrap;flex:0 0 auto;
+  }
+  .backup-nudge .bn-act:active{filter:brightness(.92);}
+  .backup-nudge .bn-x{
+    width:24px;height:24px;border-radius:50%;color:var(--muted);font-size:16px;font-weight:700;
+    flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  }
+
   #games-list{margin:10px -20px 0;}
   .game-row{
     position:relative;background:var(--card);border-bottom:1px solid var(--line);
@@ -415,6 +434,7 @@
   <div class="home-actions">
     <button class="big-btn blue" id="btn-start">Start Game</button>
   </div>
+  <div class="backup-nudge" id="backup-nudge" hidden></div>
   <div class="gaunt-card" id="gaunt-card"></div>
   <button class="fab" id="btn-stats">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -644,7 +664,7 @@ const { dayKey, parseKey, addDays, canonFact, factKey, answerFor,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt,
         masteryBaseline, masteryGrid, opStats, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear,
-        parseCSV, buildImport, parseBackup, mergeProgress,
+        parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge,
         DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD } = Z;
 
 /* ---------- IndexedDB storage ---------- */
@@ -698,6 +718,17 @@ const Store={
     const db=await openDB();
     const t=db.transaction('meta','readwrite');
     t.objectStore('meta').put({key:'progress',value:clone(p)});
+    return txDone(t);
+  },
+  async getBackupState(){
+    const db=await openDB();
+    const r=await reqP(db.transaction('meta','readonly').objectStore('meta').get('backupState'));
+    return r?r.value:null;
+  },
+  async saveBackupState(s){
+    const db=await openDB();
+    const t=db.transaction('meta','readwrite');
+    t.objectStore('meta').put({key:'backupState',value:clone(s)});
     return txDone(t);
   },
   async addSession(s){
@@ -1154,6 +1185,7 @@ const WEEKDAY=['S','M','T','W','T','F','S'];
 const FLAME_SVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
 /* smaller flame for inline use in result pills / the gauntlet card foot */
 const FLAME_SVG_SM='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
+const SHIELD_SVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>';
 const SNOW_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></svg>';
 const GHOST_SVG='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V11a9 9 0 0 1 18 0v10l-3-2-3 2-3-2-3 2-3-2z"/><line x1="9" y1="10" x2="9" y2="10.5"/><line x1="15" y1="10" x2="15" y2="10.5"/></svg>';
 /* dayKey / parseKey / addDays / dayCounts / currentStreak / bestStreak /
@@ -1323,7 +1355,8 @@ function renderGauntlet(){
    =================================================================== */
 async function renderHome(){
   /* auto-spend owned freezes to bridge recently-missed days before we draw */
-  const counts=dayCounts(await Store.getSessions());
+  const sessions=await Store.getSessions();
+  const counts=dayCounts(sessions);
   if(reconcileFreezes(counts,progress,new Date(),DAILY_GOAL)>0)
     await Store.saveProgress(progress);
   renderStreak();
@@ -1335,6 +1368,7 @@ async function renderHome(){
     gauntletToday={key:gkey,facts:buildGauntlet(problems,Date.now(),mulberry32(seedFromKey(gkey)))};
   }
   renderGauntlet();
+  renderBackupNudge(sessions);
 }
 
 /* History sheet — every past game, most-recent first (swipe to delete) */
@@ -1779,11 +1813,28 @@ async function downloadBackup(){
   }catch(err){ console.error('backup: read failed',err); toast('Could not read your data'); return; }
   const data={type:'reckon-backup',version:1,exportedAt:new Date().toISOString(),
     sessions,problems,progress:prog||progress};
-  const url=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
+  const json=JSON.stringify(data);
+  const fname='reckon-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  const file=new File([json],fname,{type:'application/json'});
+  /* Prefer the iOS share sheet (→ Save to Files → iCloud Drive) when it can
+     share a file; fall back to a plain download on desktop browsers. */
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file],title:'Reckon backup'});
+      await markBackedUp(sessions);
+      toast('Backup saved');
+      return;
+    }catch(err){
+      if(err && err.name==='AbortError') return;   // user dismissed the share sheet
+      console.error('backup: share failed, falling back to download',err);
+    }
+  }
+  const url=URL.createObjectURL(new Blob([json],{type:'application/json'}));
   const a=document.createElement('a');
-  a.href=url; a.download='reckon-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  a.href=url; a.download=fname;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),2000);
+  await markBackedUp(sessions);
   toast('Backed up '+sessions.length+' game'+(sessions.length===1?'':'s')+' + progress');
 }
 
@@ -1808,11 +1859,44 @@ async function restoreBackupFile(file){
       progRestored=true;
     }catch(err){ console.error('restore: progress save failed',err); }
   }
+  /* mark a fresh backup point so a just-restored device isn't immediately nagged */
+  backupState=Object.assign({},backupState,{lastBackupAt:Date.now()});
+  Store.saveBackupState(backupState).catch(err=>console.error('restore: backup-state save failed',err));
   await renderHome().catch(err=>console.error('restore: renderHome failed',err));
   if($('sheet-stats').classList.contains('open')) renderStats();
   if(added.games||added.problems) toast('Restored '+added.games+' game'+(added.games===1?'':'s')+(progRestored?' + XP/streak':''));
   else if(progRestored) toast('Backup already present — XP/streak refreshed');
   else toast('Nothing new to restore');
+}
+
+/* ---- backup nudge (home banner) ---- */
+const BACKUP_STALE_MS=3*86400000;    // nudge after ~3 days with unsaved games
+const BACKUP_SNOOZE_MS=3*86400000;   // dismissing hides it for ~3 days
+let backupState={lastBackupAt:0,snoozeUntil:0};
+
+async function markBackedUp(sessions){
+  backupState=Object.assign({},backupState,{lastBackupAt:Date.now()});
+  try{ await Store.saveBackupState(backupState); }catch(err){ console.error('backup: state save failed',err); }
+  renderBackupNudge(sessions||await Store.getSessions());
+}
+function dismissBackupNudge(){
+  backupState=Object.assign({},backupState,{snoozeUntil:Date.now()+BACKUP_SNOOZE_MS});
+  Store.saveBackupState(backupState).catch(err=>console.error('backup: snooze save failed',err));
+  $('backup-nudge').hidden=true;
+}
+function renderBackupNudge(sessions){
+  const el=$('backup-nudge');
+  if(!shouldBackupNudge(sessions,backupState,Date.now(),BACKUP_STALE_MS)){ el.hidden=true; el.innerHTML=''; return; }
+  const last=backupState.lastBackupAt||0;
+  const days=last?Math.max(1,Math.floor((Date.now()-last)/86400000)):0;
+  const sub=last?('Last backup '+days+' day'+(days===1?'':'s')+' ago.'):'Your games and streak aren’t backed up yet.';
+  el.innerHTML=
+    '<span class="bn-ico">'+SHIELD_SVG+'</span>'+
+    '<div class="bn-body"><div class="bn-title">Back up your progress</div>'+
+      '<div class="bn-sub">'+sub+'</div></div>'+
+    '<button class="bn-act" id="bn-backup">Back up</button>'+
+    '<button class="bn-x" id="bn-dismiss" aria-label="Dismiss">&times;</button>';
+  el.hidden=false;
 }
 
 /* ===================================================================
@@ -1836,6 +1920,10 @@ $('csv-file').addEventListener('change',e=>{ const f=e.target.files&&e.target.fi
 $('btn-backup').addEventListener('click',downloadBackup);
 $('btn-restore').addEventListener('click',()=>$('backup-file').click());
 $('backup-file').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) restoreBackupFile(f); });
+$('backup-nudge').addEventListener('click',e=>{
+  if(e.target.closest('#bn-backup')) downloadBackup();
+  else if(e.target.closest('#bn-dismiss')) dismissBackupNudge();
+});
 $('stats-period').addEventListener('click',e=>{
   const b=e.target.closest('[data-period]'); if(!b) return;
   statsPeriod=b.dataset.period; renderStats();
@@ -1913,6 +2001,7 @@ async function init(){
     const sp=await Store.getProgress();
     progress=normalizeProgress(sp);
     if(!sp) await Store.saveProgress(progress);
+    backupState=(await Store.getBackupState())||backupState;
   }catch(err){
     console.error('Storage unavailable',err);
     toast('Storage unavailable — progress won’t be saved');

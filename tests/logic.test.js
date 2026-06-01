@@ -557,3 +557,21 @@ test('mergeProgress keeps the better of each side (non-destructive)', () => {
   assert.equal(fresh.xpLifetime, 250);
   assert.equal(fresh.freezes, 2);
 });
+
+/* ===================== backup nudge ===================== */
+test('shouldBackupNudge fires only with unbacked games, past the stale window, not snoozed', () => {
+  const DAY = 86400000, STALE = 3 * DAY;
+  const now = Date.parse('2026-06-01T18:00:00.000Z');
+  const game = t => ({ endedAt: new Date(t).toISOString() });
+
+  assert.equal(Z.shouldBackupNudge([], {}, now, STALE), false);                       // no games
+  assert.equal(Z.shouldBackupNudge([game(now - DAY)], {}, now, STALE), true);         // never backed up
+  // backed up recently -> not stale yet
+  assert.equal(Z.shouldBackupNudge([game(now - DAY)], { lastBackupAt: now - DAY }, now, STALE), false);
+  // backed up long ago AND a newer game exists -> nudge
+  assert.equal(Z.shouldBackupNudge([game(now - DAY)], { lastBackupAt: now - 5 * DAY }, now, STALE), true);
+  // backed up long ago but NO game since -> nothing to lose, no nudge
+  assert.equal(Z.shouldBackupNudge([game(now - 10 * DAY)], { lastBackupAt: now - 5 * DAY }, now, STALE), false);
+  // stale + unbacked but snooze still active -> suppressed
+  assert.equal(Z.shouldBackupNudge([game(now - DAY)], { lastBackupAt: 0, snoozeUntil: now + DAY }, now, STALE), false);
+});
