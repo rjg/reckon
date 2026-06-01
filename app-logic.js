@@ -1,5 +1,5 @@
 /* =====================================================================
-   Zetamac — pure logic (no DOM, no IndexedDB).
+   Reckon — pure logic (no DOM, no IndexedDB).
 
    Lives in its own file so it can be unit-tested under `node --test`
    while also loading as a browser global. index.html pulls the names it

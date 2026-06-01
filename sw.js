@@ -1,4 +1,4 @@
-/* Zetamac service worker.
+/* Reckon service worker.
 
    HTML / navigations  -> network-first: when online you always get the
    freshest app; when offline you get the last cached copy. A `git push`
@@ -9,7 +9,7 @@
    You only need to bump CACHE below if you change THIS file's logic
    (or an icon / the manifest). Normal app edits to index.html / app-logic.js
    need nothing — both are served network-first. */
-const CACHE = 'zetamac-v4';
+const CACHE = 'reckon-v5';
 const ASSETS = [
   './',
   './index.html',

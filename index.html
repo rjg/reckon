@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#f2f2f7">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Zetamac">
+<meta name="apple-mobile-web-app-title" content="Reckon">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
-<title>Zetamac</title>
+<title>Reckon</title>
 <style>
   /* ---------- base ---------- */
   :root{
@@ -40,7 +40,7 @@
 
   /* logo */
   .logo{font-weight:300;letter-spacing:.5px;}
-  .logo b{font-weight:400;}
+  .logo b{font-weight:600;}
 
   /* ---------- home ---------- */
   .home-top{
@@ -94,12 +94,7 @@
   .streak-count{font-size:13.5px;font-weight:600;margin-left:auto;}
   .streak-count.done{color:var(--green);}
 
-  .list-head{
-    display:flex;justify-content:space-between;align-items:baseline;
-    padding:6px 18px;font-size:14px;color:var(--muted);
-  }
-  .list-head .sort{color:var(--blue);font-weight:600;}
-  #games-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:96px;}
+  #games-list{margin:10px -20px 0;}
   .game-row{
     position:relative;background:var(--card);border-bottom:1px solid var(--line);
     overflow:hidden;touch-action:pan-y;
@@ -210,21 +205,6 @@
   .pc-blue{background:#e8f1ff;} .pc-orange{background:#fff1e0;}
   .pc-red{background:#ffe9e7;} .pc-green{background:#e7f8ec;} .pc-purple{background:#f6e9fb;}
 
-  /* options dropdown */
-  #options-menu{
-    position:fixed;z-index:50;background:#fff;border-radius:13px;
-    box-shadow:0 10px 40px rgba(0,0,0,.25);padding:5px 0;min-width:190px;
-    transform-origin:top right;display:none;
-  }
-  #options-menu.open{display:block;}
-  .menu-item{
-    display:flex;justify-content:space-between;align-items:center;
-    padding:11px 16px;font-size:16px;border-bottom:1px solid #f0f0f2;width:100%;text-align:left;
-  }
-  .menu-item:last-child{border-bottom:none;}
-  .menu-item .check{color:var(--blue);font-weight:700;}
-  .menu-item:active{background:#f2f2f7;}
-
   /* results / stats tables */
   .res-score{font-size:30px;font-weight:700;margin-top:6px;}
   .res-rate{font-size:14px;color:var(--muted);margin-bottom:6px;}
@@ -270,7 +250,7 @@
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
   /* ---------- gamification ---------- */
-  .home-top-right{display:flex;align-items:center;gap:2px;}
+  .home-top-left,.home-top-right{display:flex;align-items:center;gap:2px;}
 
   /* streak: danger banner */
   .streak-risk{
@@ -392,12 +372,21 @@
 <!-- ============ HOME ============ -->
 <div class="screen active" id="screen-home">
   <div class="home-top">
+    <div class="home-top-left">
     <button class="icon-btn" id="btn-settings" aria-label="Settings">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
     </button>
+      <button class="icon-btn" id="btn-history" aria-label="History">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+    </div>
     <div class="home-top-right">
       <button class="icon-btn" id="btn-mastery" aria-label="Mastery">
         <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -419,19 +408,13 @@
       </button>
     </div>
   </div>
-  <div class="home-title"><span class="logo">&#8484;<b>etamac</b></span></div>
+  <div class="home-title"><span class="logo"><b>R</b>eckon</span></div>
   <div class="app-version" id="app-version"></div>
   <div class="streak-card" id="streak-card"></div>
   <div class="home-actions">
     <button class="big-btn blue" id="btn-start">Start Game</button>
-    <button class="big-btn purple" id="btn-options">Game Options</button>
   </div>
   <div class="gaunt-card" id="gaunt-card"></div>
-  <div class="list-head">
-    <span>Previous Games</span>
-    <span>Sorted by: <span class="sort">Recent</span></span>
-  </div>
-  <div id="games-list"></div>
   <button class="fab" id="btn-stats">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <line x1="18" y1="20" x2="18" y2="10"/>
@@ -443,7 +426,7 @@
 <!-- ============ GAME ============ -->
 <div class="screen" id="screen-game">
   <div class="game-top">
-    <span class="logo" style="font-size:22px;">&#8484;<b>etamac</b></span>
+    <span class="logo" style="font-size:22px;"><b>R</b>eckon</span>
     <button class="sheet-close" id="btn-quit" style="position:static;">&times;</button>
   </div>
   <div class="game-body">
@@ -458,9 +441,6 @@
 
 <!-- ============ BACKDROP + SHEETS ============ -->
 <div id="backdrop"></div>
-
-<!-- options dropdown -->
-<div id="options-menu"></div>
 
 <!-- settings sheet -->
 <div class="sheet" id="sheet-settings">
@@ -529,7 +509,7 @@
   <div class="grabber"></div>
   <button class="sheet-close" data-close>&times;</button>
   <div class="sheet-inner">
-    <h1 class="logo">&#8484;<b>etamac</b></h1>
+    <h1 class="logo"><b>R</b>eckon</h1>
     <div class="res-score"><span id="res-score-label">Score: </span><span id="res-score">0</span></div>
     <div class="res-rate"><span id="res-rate-label">Rate: </span><span id="res-rate">0</span></div>
     <div id="res-extra" hidden></div>
@@ -584,13 +564,24 @@
   </div>
 </div>
 
+<!-- history sheet -->
+<div class="sheet" id="sheet-history">
+  <div class="grabber"></div>
+  <button class="sheet-close" data-close>&times;</button>
+  <div class="sheet-inner">
+    <h1>History</h1>
+    <div class="muted" style="font-size:13px;">Every game you&rsquo;ve played, most recent first.</div>
+    <div id="games-list"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script src="app-logic.js"></script>
 <script>
 "use strict";
 /* =====================================================================
-   Zetamac PWA — vanilla JS, IndexedDB storage, offline service worker.
+   Reckon PWA — vanilla JS, IndexedDB storage, offline service worker.
    Sections: storage · presets · problem generation · game loop ·
    results · home · settings · game options · stats/bests/CSV · wiring.
    ===================================================================== */
@@ -629,6 +620,8 @@ const { dayKey, parseKey, addDays, canonFact, factKey, answerFor,
         DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD } = Z;
 
 /* ---------- IndexedDB storage ---------- */
+/* DB name stays 'zetamac' across the rename to Reckon — changing it would
+   orphan every existing player's saved sessions and progress. */
 const DB_NAME='zetamac', DB_VERSION=1;
 let _dbp=null;
 function openDB(){
@@ -798,16 +791,13 @@ function showScreen(name){
   fitGameScreen();
 }
 function openSheet(id){
-  closeMenu();
   $(id).classList.add('open');
   $('backdrop').classList.add('show');
 }
 function closeSheets(){
   document.querySelectorAll('.sheet.open').forEach(s=>s.classList.remove('open'));
-  closeMenu();
   $('backdrop').classList.remove('show');
 }
-function closeMenu(){ $('options-menu').classList.remove('open'); }
 
 /* ===================================================================
    GAME
@@ -1120,7 +1110,7 @@ function openGauntletResults(probs,info){
   const best=info.best!=null?(info.best/1000).toFixed(1)+'s':'—';
   let xh='';
   if(info.reward) xh+='<span class="res-xp">+'+info.reward+' XP</span>';
-  xh+='<span class="res-ghost win">🔥 Gauntlet streak '+info.streak+'</span>';
+  xh+='<span class="res-ghost win">'+FLAME_SVG_SM+'Gauntlet streak '+info.streak+'</span>';
   xh+='<span class="res-ghost info">Best today '+best+(info.improved&&!info.firstToday?' · new best!':'')+'</span>';
   const ex=$('res-extra'); ex.innerHTML=xh; ex.hidden=false;
   renderOpTable($('res-optable'),opStats(probs));
@@ -1134,6 +1124,8 @@ function openGauntletResults(probs,info){
    =================================================================== */
 const WEEKDAY=['S','M','T','W','T','F','S'];
 const FLAME_SVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
+/* smaller flame for inline use in result pills / the gauntlet card foot */
+const FLAME_SVG_SM='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>';
 const SNOW_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></svg>';
 const GHOST_SVG='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V11a9 9 0 0 1 18 0v10l-3-2-3 2-3-2-3 2-3-2z"/><line x1="9" y1="10" x2="9" y2="10.5"/><line x1="15" y1="10" x2="15" y2="10.5"/></svg>';
 /* dayKey / parseKey / addDays / dayCounts / currentStreak / bestStreak /
@@ -1218,7 +1210,7 @@ async function renderStreak(){
 
 /* one-shot confetti burst when today's goal is completed */
 function celebrate(){
-  toast('Daily goal complete! 🎉');
+  toast('Daily goal complete!');
   const cv=document.createElement('canvas'); cv.className='confetti';
   document.body.appendChild(cv);
   const dpr=window.devicePixelRatio||1, W=window.innerWidth, H=window.innerHeight;
@@ -1284,7 +1276,7 @@ function renderGauntlet(){
       '<div class="gc-blurb">'+gauntletBlurb(facts)+'</div>'+
       '<div class="gc-chips">'+chips+more+'</div>'+
       '<button class="gc-cta" id="btn-gauntlet">'+BOLT_SVG+' Start &middot; '+GAUNTLET_SIZE+' problems</button>'+
-      '<div class="gc-foot">'+(streak?'🔥 '+streak+'-day gauntlet streak':'Clear it to start a gauntlet streak')+'</div>';
+      '<div class="gc-foot">'+(streak?FLAME_SVG_SM+streak+'-day gauntlet streak':'Clear it to start a gauntlet streak')+'</div>';
   }else{
     card.innerHTML=head+'<span class="gc-tag done">&check; CLEARED</span></div>'+
       '<div class="gc-title">Your '+GAUNTLET_SIZE+' weakest facts</div>'+
@@ -1299,7 +1291,7 @@ function renderGauntlet(){
 }
 
 /* ===================================================================
-   HOME — previous games list
+   HOME  /  HISTORY
    =================================================================== */
 async function renderHome(){
   /* auto-spend owned freezes to bridge recently-missed days before we draw */
@@ -1315,6 +1307,10 @@ async function renderHome(){
     gauntletToday={key:gkey,facts:buildGauntlet(problems,Date.now(),mulberry32(seedFromKey(gkey)))};
   }
   renderGauntlet();
+}
+
+/* History sheet — every past game, most-recent first (swipe to delete) */
+async function renderHistory(){
   const sessions=(await Store.getSessions())
     .sort((a,b)=>new Date(b.endedAt)-new Date(a.endedAt));
   const list=$('games-list');
@@ -1378,7 +1374,12 @@ async function renderHome(){
   document.addEventListener('pointercancel',endSwipe);
   list.addEventListener('click',async e=>{
     const del=e.target.closest('[data-del]');
-    if(del){ await Store.deleteSession(del.dataset.del); await renderHome(); return; }
+    if(del){
+      await Store.deleteSession(del.dataset.del);
+      await renderHistory();
+      renderHome().catch(err=>console.error('renderHome after delete failed',err));
+      return;
+    }
     if(suppressClick) return;
     const row=e.target.closest('.game-row'); if(!row) return;
     if(row.classList.contains('swiped')){ row.classList.remove('swiped'); return; }
@@ -1460,34 +1461,6 @@ $('preset-list').addEventListener('click',e=>{
   const card=e.target.closest('[data-preset]'); if(!card) return;
   loadPreset(card.dataset.preset); Store.saveConfig(config); syncSettings();
   toast(card.dataset.preset+' selected');
-});
-
-/* ===================================================================
-   GAME OPTIONS dropdown
-   =================================================================== */
-function openOptionsMenu(){
-  const menu=$('options-menu');
-  const names=Object.keys(PRESETS).concat(['Custom']);
-  menu.innerHTML=names.map(n=>
-    '<button class="menu-item" data-pick="'+n+'">'+n+
-      (config.presetName===n?'<span class="check">&check;</span>':'')+'</button>'
-  ).join('');
-  /* anchor under the Game Options button */
-  const r=$('btn-options').getBoundingClientRect();
-  menu.style.top=(r.bottom+6)+'px';
-  menu.style.right=(window.innerWidth-r.right)+'px';
-  menu.classList.add('open');
-  $('backdrop').classList.add('show');
-}
-$('options-menu').addEventListener('click',e=>{
-  const item=e.target.closest('[data-pick]'); if(!item) return;
-  const pick=item.dataset.pick;
-  if(pick==='Custom'){
-    closeSheets(); syncSettings(); openSheet('sheet-settings');
-  }else{
-    loadPreset(pick); Store.saveConfig(config); closeSheets();
-    toast(pick+' selected');
-  }
 });
 
 /* ===================================================================
@@ -1699,7 +1672,7 @@ async function downloadCSV(){
   const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url; a.download='zetamac-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.href=url; a.download='reckon-'+new Date().toISOString().slice(0,10)+'.csv';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),2000);
   toast('Exported '+problems.length+' rows');
@@ -1712,7 +1685,7 @@ $('btn-start').addEventListener('click',startGame);
 /* the gauntlet CTA is re-created on every renderGauntlet — delegate (the click
    handler stays inside the tap gesture, so beginGauntlet's focus() opens the keyboard) */
 $('gaunt-card').addEventListener('click',e=>{ if(e.target.closest('#btn-gauntlet')) startGauntlet(); });
-$('btn-options').addEventListener('click',openOptionsMenu);
+$('btn-history').addEventListener('click',()=>{ openSheet('sheet-history'); renderHistory(); });
 $('btn-quit').addEventListener('click',quitGame);
 $('btn-settings').addEventListener('click',()=>{ syncSettings(); openSheet('sheet-settings'); });
 $('btn-bests').addEventListener('click',()=>{ openSheet('sheet-bests'); renderBests(); });

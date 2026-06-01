@@ -1,35 +1,63 @@
 #!/usr/bin/env python3
-"""Generate Zetamac PWA icons (pure stdlib — no Pillow needed).
+"""Generate Reckon PWA icons (pure stdlib — no Pillow needed).
 
-Draws a white "Z" on a full-bleed blue square. Full-bleed = safe for both
-iOS squircle masking and Android maskable icons.
+Draws the four math operators (+ - x /) in a 2x2 grid, white on a full-bleed
+blue square. Full-bleed = safe for both iOS squircle masking and Android
+maskable icons; the operator cluster sits inside the central safe zone.
+
+Layout (reading order):   +  -
+                          x  /
 """
 import zlib, struct, os
 
 BG = (0, 122, 255)      # iOS blue
-FG = (255, 255, 255)    # white glyph
+FG = (255, 255, 255)    # white glyphs
+SQRT2 = 1.4142135623730951
 
 
 def make_png(path, size):
-    g = size * 0.52                 # glyph box ~52% of the icon
-    gx0 = (size - g) / 2; gx1 = gx0 + g
-    gy0 = (size - g) / 2; gy1 = gy0 + g
-    t = g * 0.205                   # stroke thickness
-    band = t * 0.80                 # diagonal half-width (horizontal)
+    C = size * 0.60                 # operator cluster: centered square, 60% of icon
+    c0 = (size - C) / 2.0
+    cell = C / 2.0                  # each operator gets one 2x2 cell
+    r = cell * 0.34                 # glyph half-extent within its cell
+    th = cell * 0.105               # bar half-thickness (full stroke = 2*th)
+    dotr = cell * 0.12              # divide-dot radius
+    doff = r * 0.60                 # divide-dot offset above/below the bar
+    left = c0 + cell * 0.5          # column centers
+    right = c0 + cell * 1.5
+    top = c0 + cell * 0.5           # row centers
+    bot = c0 + cell * 1.5
 
+    def on(xc, yc):
+        # +  (top-left)
+        dx = xc - left; dy = yc - top
+        if (abs(dy) <= th and abs(dx) <= r) or (abs(dx) <= th and abs(dy) <= r):
+            return True
+        # -  (top-right)
+        dx = xc - right
+        if abs(dy) <= th and abs(dx) <= r:
+            return True
+        # x  (bottom-left): two diagonals, clipped to the glyph box
+        dx = xc - left; dy = yc - bot
+        if abs(dx) <= r and abs(dy) <= r and (
+                abs(dx - dy) <= th * SQRT2 or abs(dx + dy) <= th * SQRT2):
+            return True
+        # /  (bottom-right): bar plus a dot above and below
+        dx = xc - right
+        if (abs(dy) <= th and abs(dx) <= r) or \
+           (dx * dx + (dy + doff) ** 2 <= dotr * dotr) or \
+           (dx * dx + (dy - doff) ** 2 <= dotr * dotr):
+            return True
+        return False
+
+    white = bytes(FG)
+    blue = bytes(BG)
     raw = bytearray()
     for y in range(size):
         raw.append(0)               # PNG filter byte (none)
         yc = y + 0.5
-        in_box_y = gy0 <= yc <= gy1
-        on_bar = in_box_y and (yc < gy0 + t or yc > gy1 - t)
-        cx = gx1 - (yc - gy0) / (gy1 - gy0) * (gx1 - gx0) if in_box_y else None
         for x in range(size):
-            xc = x + 0.5
-            glyph = (gx0 <= xc <= gx1 and in_box_y and
-                     (on_bar or abs(xc - cx) <= band))
-            r, gg, b = FG if glyph else BG
-            raw.append(r); raw.append(gg); raw.append(b)
+            raw += white if on(x + 0.5, yc) else blue
 
     def chunk(typ, data):
         return (struct.pack(">I", len(data)) + typ + data +

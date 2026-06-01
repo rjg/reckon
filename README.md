@@ -1,6 +1,6 @@
-# Zetamac
+# Reckon
 
-A Zetamac-style mental-math speed drill, built as an installable PWA for the iPhone home screen.
+A mental-math speed drill, built as an installable PWA for the iPhone home screen.
 
 - Configurable operand ranges per operation (+ − × ÷) and timer length, with presets
 - Keystroke auto-advance — no submit button
