@@ -388,6 +388,111 @@
     return { firstToday, improved, best: progress.gauntletClears[key], reward };
   }
 
+  /* ---- CSV import (the inverse of index.html's downloadCSV) ----
+     The export writes one row per problem with its session's metadata
+     denormalized on. buildImport regroups rows by sessionId and rebuilds each
+     session record — score, rate, elapsed and config are DERIVED, since the
+     export doesn't carry them (elapsed is taken from the timed duration, or the
+     summed solve times when untimed). Rows with no sessionDate were logged
+     without a session (e.g. the daily gauntlet), so they come back as
+     looseProblems: problems only, no session. Pure — the IndexedDB merge and
+     dedupe live in the glue. */
+  function parseCSV(text) {
+    if (typeof text !== 'string') return [];
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);   // strip BOM
+    const rows = [];
+    let row = [], field = '', inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (inQ) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }       // escaped quote
+          else inQ = false;
+        } else field += ch;
+      } else if (ch === '"') inQ = true;
+      else if (ch === ',') { row.push(field); field = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;            // CRLF
+        row.push(field); rows.push(row); row = []; field = '';
+      } else field += ch;
+    }
+    if (field !== '' || row.length > 0) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  function parseOpsSig(sig) {
+    const ops = { add: false, sub: false, mul: false, div: false };
+    String(sig || '').split('+').forEach(k => { if (k in ops) ops[k] = true; });
+    return ops;
+  }
+  function parseRange(str) {                 // "min1-max1;min2-max2"
+    const num = v => { const x = Number(v); return Number.isFinite(x) ? x : 1; };
+    const pair = s => { const a = String(s).split('-'); return [num(a[0]), num(a[a.length - 1])]; };
+    const parts = String(str || '').split(';');
+    const p1 = pair(parts[0] || ''), p2 = pair(parts[1] || '');
+    return { min1: p1[0], max1: p1[1], min2: p2[0], max2: p2[1] };
+  }
+
+  function buildImport(rows) {
+    const fail = e => ({ ok: false, error: e, sessions: [], looseProblems: [], imported: 0, skipped: 0 });
+    if (!Array.isArray(rows) || rows.length < 2) return fail('No data rows found');
+    const col = {};
+    rows[0].forEach((h, i) => { const k = String(h).trim(); if (!(k in col)) col[k] = i; });
+    const required = ['sessionId', 'operation', 'operand1', 'operand2', 'correctAnswer',
+      'userAnswer', 'wasCorrect', 'msToAnswer', 'problemTimestamp'];
+    for (const r of required) if (!(r in col)) return fail('Not a Reckon CSV (missing "' + r + '")');
+
+    const isOp = op => op === PLUS || op === MINUS || op === TIMES || op === DIV;
+    const toInt = v => { const x = Number(v); return Number.isFinite(x) ? Math.round(x) : null; };
+
+    const order = [], groups = {}, meta = {};
+    let imported = 0, skipped = 0;
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || (row.length === 1 && row[0] === '')) continue;   // blank line
+      const get = name => { const idx = col[name]; return idx == null || row[idx] == null ? '' : row[idx]; };
+      const sid = String(get('sessionId')).trim();
+      const op = String(get('operation'));
+      const o1 = toInt(get('operand1')), o2 = toInt(get('operand2'));
+      const ca = toInt(get('correctAnswer')), ua = toInt(get('userAnswer')), ms = toInt(get('msToAnswer'));
+      if (!sid || !isOp(op) || o1 === null || o2 === null || ca === null || ua === null || ms === null) { skipped++; continue; }
+      const ts = Date.parse(get('problemTimestamp'));
+      if (!groups[sid]) { groups[sid] = []; order.push(sid); meta[sid] = { endedAt: '', presetName: '', ops: '', add: '', mul: '', durationSec: '' }; }
+      groups[sid].push({
+        sessionId: sid, timestamp: Number.isFinite(ts) ? ts : 0, operation: op,
+        operand1: o1, operand2: o2, correctAnswer: ca, userAnswer: ua,
+        wasCorrect: String(get('wasCorrect')).trim().toLowerCase() === 'true',
+        msToAnswer: Math.max(0, ms),
+      });
+      const mt = meta[sid], set = (k, v) => { if (!mt[k] && v) mt[k] = String(v).trim(); };
+      set('endedAt', get('sessionDate')); set('presetName', get('presetName'));
+      set('ops', get('enabledOps')); set('add', get('addRange'));
+      set('mul', get('mulRange')); set('durationSec', get('durationSec'));
+      imported++;
+    }
+
+    const sessions = [], looseProblems = [];
+    for (const sid of order) {
+      const probs = groups[sid], mt = meta[sid];
+      if (!mt.endedAt) { for (const p of probs) looseProblems.push(p); continue; }
+      const durationSec = Math.max(0, toInt(mt.durationSec) || 0);
+      const sumMs = probs.reduce((a, p) => a + p.msToAnswer, 0);
+      const elapsedMs = durationSec > 0 ? durationSec * 1000 : sumMs;  // timed games run ~full duration
+      const endedMs = Date.parse(mt.endedAt);
+      const score = probs.length, errorCount = probs.filter(p => !p.wasCorrect).length;
+      sessions.push({
+        sessionId: sid, presetName: mt.presetName || 'Custom',
+        startedAt: Number.isFinite(endedMs) ? new Date(endedMs - elapsedMs).toISOString() : mt.endedAt,
+        endedAt: mt.endedAt, durationSec, elapsedMs,
+        score, totalAnswered: score, errorCount,
+        rate: elapsedMs > 0 ? score / (elapsedMs / 1000) : 0,
+        config: { presetName: mt.presetName || 'Custom', durationSec, ops: parseOpsSig(mt.ops), add: parseRange(mt.add), mul: parseRange(mt.mul) },
+        problems: probs,
+      });
+    }
+    return { ok: true, error: '', sessions, looseProblems, imported, skipped };
+  }
+
   return {
     PLUS, MINUS, TIMES, DIV, OP_ORDER,
     DAILY_GOAL, FREEZE_COST, MAX_FREEZES,
@@ -400,5 +505,6 @@
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     opStats, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear,
+    parseCSV, buildImport,
   };
 });

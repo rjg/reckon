@@ -241,6 +241,7 @@
     background:var(--blue);color:#fff;font-weight:600;font-size:16px;touch-action:manipulation;
   }
   .csv-btn:active{filter:brightness(.92);}
+  .csv-btn.alt{background:#fff;color:var(--blue);box-shadow:inset 0 0 0 1.5px var(--blue);margin-top:10px;}
 
   #toast{
     position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);
@@ -539,6 +540,14 @@
         <polyline points="7 10 12 15 17 10"/>
         <line x1="12" y1="15" x2="12" y2="3"/>
       </svg>Download CSV</button>
+    <button class="csv-btn alt" id="btn-import">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>Import CSV</button>
+    <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
+    <div class="muted" style="font-size:12px;margin-top:8px;text-align:center;">Restoring a backup? Import only adds games you don&rsquo;t already have &mdash; it never overwrites or deletes.</div>
   </div>
 </div>
 
@@ -616,7 +625,7 @@ const { dayKey, parseKey, addDays, canonFact, factKey, answerFor,
         defaultProgress, normalizeProgress, xpForSession, awardXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt,
         masteryBaseline, masteryGrid, opStats, computeWeakFacts, genProblem, OP_ORDER,
-        buildGauntlet, gauntletStreak, recordGauntletClear,
+        buildGauntlet, gauntletStreak, recordGauntletClear, parseCSV, buildImport,
         DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD } = Z;
 
 /* ---------- IndexedDB storage ---------- */
@@ -1678,6 +1687,67 @@ async function downloadCSV(){
   toast('Exported '+problems.length+' rows');
 }
 
+/* ---- CSV import: merge a previously exported CSV back in ----
+   Non-destructive recovery path. buildImport (app-logic.js) rebuilds the
+   sessions/problems; here we add only sessionIds we don't already have (and
+   gauntlet/loose problems for sessionIds with no existing problems), so
+   re-importing is idempotent and existing data is never overwritten. Note:
+   XP and streak-freezes aren't in the CSV so they aren't restored — but the
+   streak itself recomputes from the imported games. */
+function readFileText(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(String(r.result||''));
+    r.onerror=()=>rej(r.error||new Error('read error'));
+    r.readAsText(file);
+  });
+}
+async function importCSVFile(file){
+  let text;
+  try{ text=await readFileText(file); }
+  catch(err){ console.error('import: read failed',err); toast('Could not read that file'); return; }
+  let parsed;
+  try{ parsed=buildImport(parseCSV(text)); }
+  catch(err){ console.error('import: parse failed',err); toast('That file isn’t a valid CSV'); return; }
+  if(!parsed.ok){ toast(parsed.error||'Unrecognized CSV'); return; }
+  if(!parsed.sessions.length && !parsed.looseProblems.length){ toast('No games found in that CSV'); return; }
+
+  let existingSessions, existingProblems;
+  try{
+    existingSessions=await Store.getSessions();
+    existingProblems=await Store.getProblems();
+  }catch(err){ console.error('import: read store failed',err); toast('Storage unavailable — import aborted'); return; }
+  const haveSession=new Set(existingSessions.map(s=>s.sessionId));
+  const haveProblemSid=new Set(existingProblems.map(p=>p.sessionId));
+
+  const sessionsToAdd=[], problemsToAdd=[];
+  let addedGames=0;
+  for(const s of parsed.sessions){
+    if(haveSession.has(s.sessionId)) continue;             // already have this game — skip, don't overwrite
+    const problems=s.problems, session=Object.assign({},s); delete session.problems;
+    sessionsToAdd.push(session);
+    for(const p of problems) problemsToAdd.push(p);
+    addedGames++;
+  }
+  const looseBySid={};
+  for(const p of parsed.looseProblems){ (looseBySid[p.sessionId]=looseBySid[p.sessionId]||[]).push(p); }
+  for(const sid in looseBySid){
+    if(haveProblemSid.has(sid)) continue;                  // gauntlet problems already present
+    for(const p of looseBySid[sid]) problemsToAdd.push(p);
+  }
+
+  if(!sessionsToAdd.length && !problemsToAdd.length){ toast('Already imported — nothing new'); return; }
+  try{
+    for(const s of sessionsToAdd) await Store.addSession(s);
+    await Store.addProblems(problemsToAdd);
+  }catch(err){ console.error('import: write failed',err); toast('Import failed while saving'); return; }
+
+  await renderHome().catch(err=>console.error('import: renderHome failed',err));
+  if($('sheet-stats').classList.contains('open')) renderStats();
+  const extra=parsed.skipped?(' · '+parsed.skipped+' rows skipped'):'';
+  toast('Imported '+addedGames+' game'+(addedGames===1?'':'s')+' · '+problemsToAdd.length+' problems'+extra);
+}
+
 /* ===================================================================
    WIRING
    =================================================================== */
@@ -1694,6 +1764,8 @@ $('btn-stats').addEventListener('click',()=>{ openSheet('sheet-stats'); renderSt
 /* the buy-freeze button is re-created on every renderStreak — delegate */
 $('streak-card').addEventListener('click',e=>{ if(e.target.closest('#btn-buy-freeze')) onBuyFreeze(); });
 $('btn-csv').addEventListener('click',downloadCSV);
+$('btn-import').addEventListener('click',()=>$('csv-file').click());
+$('csv-file').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importCSVFile(f); });
 $('stats-period').addEventListener('click',e=>{
   const b=e.target.closest('[data-period]'); if(!b) return;
   statsPeriod=b.dataset.period; renderStats();

@@ -439,3 +439,79 @@ test('progress carries gauntletClears through default + normalize', () => {
   const keep = { '2026-05-20': 25000 };
   assert.deepEqual(Z.normalizeProgress({ gauntletClears: keep }).gauntletClears, keep);
 });
+
+/* ===================== CSV import ===================== */
+const CSV_HEAD = ['sessionId', 'sessionDate', 'presetName', 'enabledOps', 'addRange', 'mulRange',
+  'durationSec', 'operation', 'operand1', 'operand2', 'correctAnswer', 'userAnswer',
+  'wasCorrect', 'msToAnswer', 'problemTimestamp'];
+
+test('parseCSV handles BOM, CRLF, and quoted fields with commas/quotes', () => {
+  const text = '﻿a,b,c\r\n1,"x,y","he said ""hi"""\r\n';
+  const rows = Z.parseCSV(text);
+  assert.equal(rows.length, 2);                 // trailing CRLF doesn't make an empty row
+  assert.deepEqual(rows[0], ['a', 'b', 'c']);
+  assert.deepEqual(rows[1], ['1', 'x,y', 'he said "hi"']);
+});
+
+test('buildImport rebuilds a session with derived score/rate/errors/config', () => {
+  const end = '2026-05-20T18:02:00.000Z';
+  const t0 = Date.parse('2026-05-20T18:00:00.000Z');
+  const text = [
+    CSV_HEAD.join(','),
+    ['s1', end, 'Normal', 'add+sub+mul+div', '2-100;2-100', '2-12;2-100', '120',
+      PLUS, '7', '8', '15', '15', 'true', '1200', new Date(t0).toISOString()].join(','),
+    ['s1', end, 'Normal', 'add+sub+mul+div', '2-100;2-100', '2-12;2-100', '120',
+      TIMES, '6', '9', '54', '50', 'false', '3000', new Date(t0 + 1200).toISOString()].join(','),
+  ].join('\r\n');
+  const res = Z.buildImport(Z.parseCSV(text));
+  assert.equal(res.ok, true);
+  assert.equal(res.sessions.length, 1);
+  const s = res.sessions[0];
+  assert.equal(s.sessionId, 's1');
+  assert.equal(s.score, 2);
+  assert.equal(s.errorCount, 1);
+  assert.equal(s.durationSec, 120);
+  assert.equal(s.elapsedMs, 120000);
+  assert.ok(Math.abs(s.rate - 2 / 120) < 1e-9);
+  assert.deepEqual(s.config.ops, { add: true, sub: true, mul: true, div: true });
+  assert.deepEqual(s.config.add, { min1: 2, max1: 100, min2: 2, max2: 100 });
+  assert.deepEqual(s.config.mul, { min1: 2, max1: 12, min2: 2, max2: 100 });
+  assert.equal(s.problems.length, 2);
+  assert.equal(s.problems[1].wasCorrect, false);
+  assert.equal(s.problems[1].userAnswer, 50);
+});
+
+test('buildImport routes session-less rows to looseProblems and skips bad rows', () => {
+  const ts = new Date(Date.parse('2026-05-20T18:00:00.000Z')).toISOString();
+  const text = [
+    CSV_HEAD.join(','),
+    ['g1', '', '', '', '', '', '', DIV, '56', '7', '8', '8', 'true', '900', ts].join(','),   // gauntlet: no session
+    ['s2', ts, 'Fast', 'add', '1-9;1-9', '1-9;1-9', '60', '?', '2', '3', '5', '5', 'true', '800', ts].join(','), // bad op
+    ['s2', ts, 'Fast', 'add', '1-9;1-9', '1-9;1-9', '60', PLUS, 'x', '3', '5', '5', 'true', '800', ts].join(','), // bad operand
+  ].join('\r\n');
+  const res = Z.buildImport(Z.parseCSV(text));
+  assert.equal(res.ok, true);
+  assert.equal(res.sessions.length, 0);
+  assert.equal(res.looseProblems.length, 1);
+  assert.equal(res.looseProblems[0].operation, DIV);
+  assert.equal(res.imported, 1);
+  assert.equal(res.skipped, 2);
+});
+
+test('buildImport maps columns by name and rejects a non-Reckon CSV', () => {
+  const head2 = ['problemTimestamp', 'operation', 'operand1', 'operand2', 'correctAnswer',
+    'userAnswer', 'wasCorrect', 'msToAnswer', 'sessionId', 'sessionDate', 'presetName',
+    'enabledOps', 'addRange', 'mulRange', 'durationSec'];
+  const ts = new Date(Date.parse('2026-05-20T18:00:00.000Z')).toISOString();
+  const good = [head2.join(','),
+    [ts, PLUS, '1', '2', '3', '3', 'true', '500', 's3', ts, 'Easy', 'add', '1-9;1-9', '1-9;1-9', '120'].join(',')
+  ].join('\n');                                  // LF-only line endings
+  const r1 = Z.buildImport(Z.parseCSV(good));
+  assert.equal(r1.ok, true);
+  assert.equal(r1.sessions.length, 1);
+  assert.equal(r1.sessions[0].problems[0].operation, PLUS);
+
+  const bad = Z.buildImport(Z.parseCSV('foo,bar\n1,2\n'));
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /Reckon CSV/);
+});
