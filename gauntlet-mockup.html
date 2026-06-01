@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Today's Gauntlet — mockup v2</title>
+<!--
+  ============================================================================
+  TODAY'S GAUNTLET — interactive design mockup (NOT wired into the app)
+
+  Standalone on purpose so index.html stays untouched while we iterate.
+  Deliberately NOT in deploy.yml's cp list, so it never ships.
+
+  Decisions baked in (per Ryan, this round):
+    1. Race the clock — clear all 10, lowest time wins.
+    2. Content = YOUR 10 WEAKEST FACTS (not themed sets). Uses the real
+       Z.computeWeakFacts() from app-logic.js over a synthetic history, so this
+       mockup demonstrates the actual ranking. The mockbar "master set" button
+       simulates getting fast on today's 10 and shows the next-weakest rise in.
+    3. Gauntlet replaces the old "Challenge" home button (same job — drill your
+       weak facts — now as a daily quest). Home here shows that layout.
+    4. Gauntlet Streak — a separate streak just for clearing the daily.
+    5. XP reward = flat +50 placeholder (to be designed/wired later).
+
+  Production notes (NOT implemented here, but this is the intended shape):
+    • Feed computeWeakFacts a RECENT window of history (e.g. last ~2-4 weeks),
+      not all-time, so improvement actually evicts facts from the bucket.
+    • Snapshot the 10 at first open each day; reuse for retries; recompute next day.
+    • Cold start: top up with generated problems until enough history exists.
+
+  Requires app-logic.js as a sibling — view via `python3 -m http.server` and
+  open /gauntlet-mockup.html (NOT file://, or the script won't load).
+  ============================================================================
+-->
+<script src="app-logic.js"></script>
+<style>
+  /* ---- tokens copied from index.html so it looks native ---- */
+  :root{
+    --blue:#007aff; --purple:#c645d6; --red:#ff3b30; --green:#34c759; --orange:#ff9500;
+    --bg:#f2f2f7; --card:#fff; --line:#e5e5ea; --ink:#1c1c1e; --muted:#8e8e93;
+    --grad:linear-gradient(135deg,#6d5efc 0%,#a855f7 55%,#c645d6 100%);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;
+    background:#d9d9e3;color:var(--ink);-webkit-text-size-adjust:100%;display:flex;justify-content:center;
+  }
+  button,input{font-family:inherit;}
+  button{cursor:pointer;border:none;background:none;touch-action:manipulation;}
+
+  .app{
+    width:100%;max-width:430px;min-height:100vh;background:var(--bg);
+    position:relative;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.15);
+    display:flex;flex-direction:column;
+  }
+  .screen{display:none;flex:1;flex-direction:column;}
+  .screen.active{display:flex;}
+
+  /* ---- home ---- */
+  .home-top{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 4px;}
+  .icon-btn{font-size:22px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+  .logo{font-weight:300;letter-spacing:.5px;}
+  .logo b{font-weight:400;}
+  .home-title{text-align:center;margin:2px 0 14px;}
+  .home-title .logo{font-size:30px;}
+
+  .stub-card{
+    margin:0 16px 14px;padding:13px 16px;background:var(--card);border-radius:14px;
+    box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;align-items:center;gap:9px;color:var(--muted);font-size:14px;
+  }
+  .stub-card .flame{color:var(--orange);}
+  .stub-card b{color:var(--ink);font-size:18px;font-weight:700;}
+
+  /* home action buttons (Start / Options), matching the app */
+  .home-actions{display:flex;gap:12px;padding:0 16px 16px;}
+  .home-actions .big-btn{flex:1;padding:15px 8px;border-radius:14px;color:#fff;font-size:17px;font-weight:600;}
+  .big-btn.blue{background:var(--blue);} .big-btn.purple{background:var(--purple);}
+  .big-btn:active{filter:brightness(.92);}
+
+  /* ---- THE GAUNTLET CARD (in the old Challenge slot) ---- */
+  .gaunt-card{
+    margin:0 16px 16px;padding:16px 17px 15px;border-radius:16px;color:#fff;
+    background:var(--grad);box-shadow:0 6px 18px rgba(109,94,252,.35);position:relative;overflow:hidden;
+  }
+  .gaunt-card::after{content:"";position:absolute;right:-40px;top:-60px;width:160px;height:160px;
+    background:radial-gradient(circle,rgba(255,255,255,.18),transparent 70%);}
+  .gc-head{display:flex;align-items:center;gap:8px;position:relative;}
+  .gc-kicker{font-size:11.5px;font-weight:800;letter-spacing:.09em;opacity:.92;}
+  .gc-bolt{display:inline-flex;}
+  .gc-tag{margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.05em;background:rgba(255,255,255,.22);padding:3px 9px;border-radius:9px;}
+  .gc-tag.done{background:rgba(255,255,255,.92);color:#7c3aed;}
+  .gc-theme{font-size:21px;font-weight:800;margin:9px 0 1px;position:relative;letter-spacing:.2px;}
+  .gc-blurb{font-size:12.5px;opacity:.92;position:relative;}
+  .gc-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px;position:relative;}
+  .gc-chip{font-size:12px;font-weight:700;background:rgba(255,255,255,.18);padding:4px 9px;border-radius:8px;font-variant-numeric:tabular-nums;}
+  .gc-cta{margin-top:13px;width:100%;padding:13px;border-radius:12px;position:relative;
+    background:rgba(255,255,255,.95);color:#6d28d9;font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;gap:7px;}
+  .gc-cta:active{filter:brightness(.94);}
+  .gc-cta.ghost{background:rgba(255,255,255,.16);color:#fff;}
+  .gc-foot{margin-top:12px;display:flex;align-items:center;gap:7px;font-size:12.5px;opacity:.95;position:relative;}
+  .gc-done-stats{display:flex;align-items:center;gap:14px;margin:11px 0 2px;position:relative;}
+  .gc-stat .k{font-size:11px;opacity:.85;letter-spacing:.04em;}
+  .gc-stat .v{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1;}
+  .gc-reward{margin-left:auto;text-align:right;background:rgba(255,255,255,.16);padding:7px 11px;border-radius:11px;}
+  .gc-reward .v{font-size:17px;font-weight:800;} .gc-reward .k{font-size:10px;opacity:.85;letter-spacing:.03em;}
+
+  .home-hint{margin:2px 16px;padding:11px 13px;border-radius:11px;background:#eef0ff;color:#5b56b8;font-size:12.5px;line-height:1.45;}
+  .home-hint b{color:#4338ca;}
+
+  /* ---- play ---- */
+  #screen-play{background:#fff;}
+  .play-top{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 0;}
+  .play-top .ttl{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:700;}
+  .play-top .ttl .gc-bolt{color:#7c3aed;}
+  .sheet-close{width:30px;height:30px;border-radius:50%;background:#e5e5ea;color:#8e8e93;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+  .play-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 18px 40px;}
+  .play-meta{display:flex;align-items:baseline;gap:18px;}
+  .pm-time{font-size:34px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.5px;}
+  .pm-count{font-size:15px;font-weight:600;color:var(--muted);}
+  .pips{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;max-width:240px;}
+  .pip{width:13px;height:13px;border-radius:50%;background:#e5e5ea;transition:background .15s;}
+  .pip.on{background:#7c3aed;}
+  .problem{font-size:38px;font-weight:400;letter-spacing:1px;margin:6px 0;}
+  #answer{width:180px;padding:14px;font-size:22px;text-align:center;border:1.5px solid var(--line);border-radius:12px;outline:none;background:#fff;color:var(--ink);}
+  #answer:focus{border-color:#a855f7;}
+  #answer::placeholder{color:#c7c7cc;}
+
+  /* ---- done ---- */
+  #screen-done{background:var(--bg);}
+  .done-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 22px;text-align:center;}
+  .done-check{width:74px;height:74px;border-radius:50%;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:6px;box-shadow:0 8px 22px rgba(124,58,237,.35);animation:pop .4s cubic-bezier(.2,1.4,.4,1);}
+  @keyframes pop{0%{transform:scale(.4);opacity:0;}100%{transform:scale(1);opacity:1;}}
+  .done-h{font-size:25px;font-weight:800;margin:8px 0 2px;}
+  .done-theme{font-size:14px;color:var(--muted);margin-bottom:18px;}
+  .done-time{font-size:52px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:1px;line-height:1;}
+  .done-time small{font-size:22px;font-weight:700;color:var(--muted);}
+  .done-pb{font-size:13px;font-weight:700;color:var(--green);margin-top:6px;height:18px;}
+  .done-cards{display:flex;gap:10px;width:100%;margin:20px 0 6px;}
+  .dcard{flex:1;background:var(--card);border-radius:13px;padding:12px 8px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .dcard .k{font-size:11px;color:var(--muted);letter-spacing:.03em;}
+  .dcard .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px;}
+  .dcard.reward{background:#f3edff;} .dcard.reward .v{color:#7c3aed;}
+  .reward-soon{font-size:9.5px;font-weight:800;letter-spacing:.04em;color:#a855f7;background:#ece4ff;border-radius:6px;padding:1px 5px;margin-left:4px;vertical-align:2px;}
+  .done-note{font-size:12.5px;color:var(--muted);margin:14px 0 0;}
+  .done-actions{display:flex;gap:10px;width:100%;margin-top:20px;}
+  .done-actions .big-btn{flex:1;padding:14px 8px;border-radius:13px;font-size:16px;font-weight:700;}
+  .big-btn.primary{background:var(--grad);color:#fff;} .big-btn.sub{background:#e5e5ea;color:#3a3a3c;}
+
+  /* ---- toast ---- */
+  #toast{position:absolute;left:50%;bottom:84px;transform:translateX(-50%) translateY(20px);background:#1c1c1e;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;opacity:0;transition:.25s;z-index:90;pointer-events:none;max-width:90%;text-align:center;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ---- MOCKUP scaffolding bar ---- */
+  .mockbar{position:sticky;bottom:0;margin-top:auto;display:flex;align-items:center;gap:6px;padding:8px 10px;background:#1c1c2b;color:#cfcfe6;font-size:11.5px;flex-wrap:wrap;border-top:2px dashed #4b4b66;}
+  .mockbar .lab{font-weight:800;letter-spacing:.06em;color:#8f8fc7;}
+  .mockbar button{background:#33334d;color:#e6e6f2;border-radius:7px;padding:5px 9px;font-size:11.5px;font-weight:600;}
+  .mockbar button.accent{background:#5b4bd6;}
+  .mockbar button:active{background:#44445f;}
+  .mockbar .day{font-variant-numeric:tabular-nums;min-width:96px;text-align:center;}
+  .mockbar .spacer{flex:1;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ HOME ============ -->
+  <div class="screen active" id="screen-home">
+    <div class="home-top"><span class="icon-btn">&#9881;</span><span class="icon-btn">&#9636;</span></div>
+    <div class="home-title"><span class="logo">&#8484;<b>etamac</b></span></div>
+
+    <div class="stub-card"><span class="flame">&#128293;</span><b>7</b>&nbsp;day streak
+      <span style="margin-left:auto;">Today&rsquo;s goal 3 / 5</span></div>
+
+    <!-- Start / Game Options (Challenge button removed — see card below) -->
+    <div class="home-actions">
+      <button class="big-btn blue">Start Game</button>
+      <button class="big-btn purple">Game Options</button>
+    </div>
+
+    <!-- THE GAUNTLET CARD — replaces the old "Challenge — your hardest facts" -->
+    <div class="gaunt-card" id="gaunt-card"></div>
+
+    <div class="home-hint">
+      <b>Today&rsquo;s set = your 10 weakest facts</b>, pulled from your logged history via
+      the same ranking the old Challenge used. Get fast on them and they drop out — the
+      next-weakest move in. Tap <b>&ldquo;master set&rdquo;</b> in the mock bar to watch that happen.
+    </div>
+  </div>
+
+  <!-- ============ PLAY ============ -->
+  <div class="screen" id="screen-play">
+    <div class="play-top">
+      <span class="ttl"><span class="gc-bolt" id="play-bolt"></span>Gauntlet</span>
+      <button class="sheet-close" id="btn-quit">&times;</button>
+    </div>
+    <div class="play-body">
+      <div class="play-meta"><span class="pm-time" id="play-time">0.0s</span><span class="pm-count" id="play-count">1 / 10</span></div>
+      <div class="pips" id="play-pips"></div>
+      <div class="problem" id="play-problem">&nbsp;</div>
+      <input id="answer" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Answer">
+    </div>
+  </div>
+
+  <!-- ============ DONE ============ -->
+  <div class="screen" id="screen-done">
+    <div class="done-wrap">
+      <div class="done-check">&check;</div>
+      <div class="done-h">Gauntlet cleared!</div>
+      <div class="done-theme">Your 10 weakest facts</div>
+      <div class="done-time" id="done-time">0.0<small>s</small></div>
+      <div class="done-pb" id="done-pb"></div>
+      <div class="done-cards">
+        <div class="dcard"><div class="k">BEST TODAY</div><div class="v" id="done-best">&mdash;</div></div>
+        <div class="dcard"><div class="k">GAUNTLET STREAK</div><div class="v" id="done-streak">&mdash;</div></div>
+        <div class="dcard reward"><div class="k">REWARD <span class="reward-soon">SOON</span></div><div class="v" id="done-reward">+50</div></div>
+      </div>
+      <div class="done-note" id="done-note">XP reward is a placeholder. A new set unlocks tomorrow.</div>
+      <div class="done-actions">
+        <button class="big-btn sub" id="btn-retry">Try for a faster time</button>
+        <button class="big-btn primary" id="btn-home">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <!-- MOCKUP scaffolding -->
+  <div class="mockbar">
+    <span class="lab">MOCKUP</span>
+    <button id="mb-prev">&#9664;</button>
+    <span class="day" id="mb-day">today</span>
+    <button id="mb-next">&#9654;</button>
+    <button id="mb-master" class="accent">&#9889; master set</button>
+    <span class="spacer"></span>
+    <button id="mb-reset">reset clear</button>
+    <button id="mb-home">home</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+if(!window.Z){ document.body.innerHTML='<p style="padding:30px;font:16px -apple-system">Serve this over http (<code>python3 -m http.server</code>) so <b>app-logic.js</b> loads — opening the file directly won&rsquo;t work.</p>'; throw new Error('Z missing'); }
+const { computeWeakFacts, genProblem, factKey, PLUS, MINUS, TIMES, DIV } = Z;
+
+const N = 10;                  // problems per gauntlet
+const REWARD_XP = 50;          // flat placeholder reward (#5)
+const BOLT = '<svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>';
+
+/* ---------------------------------------------------------------------------
+   Synthetic history → real computeWeakFacts. factbook keys a canonical fact to
+   its samples; we flatten it into the problem-record shape the function expects.
+   "Mastering" a fact = replacing its samples with fast, correct ones.
+   --------------------------------------------------------------------------- */
+function mk(op,o1,o2){ const ans = op===PLUS?o1+o2 : op===MINUS?o1-o2 : op===TIMES?o1*o2 : o1/o2; return {op,o1,o2,ans}; }
+const factbook = {};
+function put(op,o1,o2, baseMs, misses, n){
+  const f=mk(op,o1,o2), key=op+':'+o1+':'+o2, samples=[];
+  for(let i=0;i<n;i++) samples.push({ ms: baseMs + i*40, ok: i>=misses });
+  factbook[key]={ ...f, samples };
+}
+/* a few slow / occasionally-missed facts (the "weak" ones) ... */
+[ [TIMES,7,8,3200,1,5],[TIMES,6,9,2900,0,4],[TIMES,7,12,3600,1,4],[TIMES,7,9,3000,0,4],
+  [TIMES,6,8,2700,0,4],[TIMES,8,9,3100,1,4],[DIV,56,7,3300,1,4],[DIV,63,9,3000,0,4],
+  [DIV,48,6,2800,0,4],[DIV,84,7,3700,1,4],[DIV,72,8,3200,0,4],[PLUS,38,47,2600,0,4],
+  [PLUS,26,59,2700,1,4],[PLUS,57,68,3000,0,4],[MINUS,85,47,2900,0,4],[MINUS,125,68,3400,1,4]
+].forEach(a=>put(...a));
+/* ... and lots of fast, accurate facts so the baseline reflects normal solves */
+for(let a=2;a<=9;a++){ put(PLUS,a,a+1,700,0,5); put(TIMES,2,a,720,0,5); put(MINUS,a+5,a,690,0,5); }
+
+function history(){
+  const out=[];
+  for(const k in factbook){ const f=factbook[k];
+    for(const s of f.samples) out.push({ operation:f.op, operand1:f.o1, operand2:f.o2, correctAnswer:f.ans, wasCorrect:s.ok, msToAnswer:s.ms });
+  }
+  return out;
+}
+/* today's 10 weakest — REAL ranking. (Production: pass a recent window + snapshot per day.) */
+function weakSet(){
+  const facts = computeWeakFacts(history(), N);
+  if(facts.length>=N) return facts.slice(0,N);
+  // cold-start fallback: top up with generated problems from a normal preset
+  const cfg={ ops:{add:1,sub:1,mul:1,div:1}, add:{min1:2,max1:50,min2:2,max2:50}, mul:{min1:2,max1:12,min2:2,max2:12} };
+  let i=0; while(facts.length<N){ const p=genProblem(cfg, mulberry32(1000+i++)); facts.push({operation:p.operation,operand1:p.operand1,operand2:p.operand2,correctAnswer:p.correctAnswer,display:p.display}); }
+  return facts;
+}
+function masterTodaysSet(){                       // simulate getting fast on them
+  for(const f of weakSet()){ const key=f.operation+':'+f.operand1+':'+f.operand2;
+    if(factbook[key]) factbook[key].samples=[{ms:740,ok:1},{ms:760,ok:1},{ms:720,ok:1}]; }
+}
+
+/* describe which ops dominate today's set, for the card blurb */
+function blurbFor(set){
+  const names={['+']:'addition',['−']:'subtraction',['×']:'multiplication',['÷']:'division'};
+  const c={}; set.forEach(f=>c[f.operation]=(c[f.operation]||0)+1);
+  const top=Object.keys(c).sort((a,b)=>c[b]-c[a]).slice(0,2).map(o=>names[o]);
+  return (top.length>1? top[0]+' & '+top[1] : top[0]) + ' are your slow spots';
+}
+
+/* ---- date + persistence (mockup) ---- */
+let dayOffset=0;
+function dayKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function today(){ const d=new Date(); d.setDate(d.getDate()+dayOffset); d.setHours(0,0,0,0); return d; }
+function seedFromKey(k){ return Number(k.replace(/-/g,'')); }
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function shuffled(arr,seed){ const r=mulberry32(seed), a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(r()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+const LS='gauntlet-mock-v2';
+function load(){ try{ return JSON.parse(localStorage.getItem(LS))||{}; }catch(e){ return {}; } }
+function save(o){ try{ localStorage.setItem(LS, JSON.stringify(o)); }catch(e){} }
+function seedHistoryOnce(){ const o=load(); if(o.__seeded) return; const base=new Date(); base.setHours(0,0,0,0);
+  [27300,31900,22800,29500].forEach((ms,i)=>{ const d=new Date(base); d.setDate(d.getDate()-(i+1)); o[dayKey(d)]={bestMs:ms}; });
+  o.__seeded=true; save(o); }
+function bestFor(k){ const r=load()[k]; return r&&r.bestMs?r.bestMs:null; }
+function recordClear(k,ms){ const o=load(), cur=o[k]&&o[k].bestMs, improved=cur==null||ms<cur; o[k]={bestMs:improved?ms:cur}; save(o); return improved; }
+function gauntletStreak(){ const o=load(); let d=today(), n=0; while(o[dayKey(d)]&&o[dayKey(d)].bestMs){ n++; d=new Date(d); d.setDate(d.getDate()-1); } return n; }
+
+/* ---- helpers ---- */
+const $=id=>document.getElementById(id);
+function show(scr){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); $(scr).classList.add('active'); }
+function fmt(ms){ return (ms/1000).toFixed(1); }
+let toastT; function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+/* =========================================================================
+   HOME
+   ========================================================================= */
+function todaysGauntlet(){ const k=dayKey(today()); return { key:k, probs:shuffled(weakSet(), seedFromKey(k)) }; }
+function renderHome(){
+  const g=todaysGauntlet(), best=bestFor(g.key), streak=gauntletStreak(), c=$('gaunt-card');
+  if(best==null){
+    const chips=g.probs.slice(0,3).map(f=>'<span class="gc-chip">'+f.display+'</span>').join('');
+    c.innerHTML=
+      '<div class="gc-head"><span class="gc-bolt">'+BOLT+'</span><span class="gc-kicker">TODAY’S GAUNTLET</span><span class="gc-tag">NEW</span></div>'+
+      '<div class="gc-theme">Your 10 weakest facts</div>'+
+      '<div class="gc-blurb">'+blurbFor(g.probs)+' · race the clock</div>'+
+      '<div class="gc-chips">'+chips+'<span class="gc-chip">+'+(N-3)+' more</span></div>'+
+      '<button class="gc-cta" id="gc-start">'+BOLT+' Start · '+N+' problems</button>'+
+      '<div class="gc-foot">'+(streak?('🔥 '+streak+'-day gauntlet streak'):'Clear it to start a gauntlet streak')+'</div>';
+  }else{
+    c.innerHTML=
+      '<div class="gc-head"><span class="gc-bolt">'+BOLT+'</span><span class="gc-kicker">TODAY’S GAUNTLET</span><span class="gc-tag done">&check; CLEARED</span></div>'+
+      '<div class="gc-theme">Your 10 weakest facts</div>'+
+      '<div class="gc-done-stats">'+
+        '<div class="gc-stat"><div class="k">BEST TODAY</div><div class="v">'+fmt(best)+'s</div></div>'+
+        '<div class="gc-stat"><div class="k">STREAK</div><div class="v">'+(streak||1)+'</div></div>'+
+        '<div class="gc-reward"><div class="k">EARNED</div><div class="v">+'+REWARD_XP+'</div></div></div>'+
+      '<button class="gc-cta ghost" id="gc-start">Try for a faster time</button>'+
+      '<div class="gc-foot">New set tomorrow · recomputed from your latest results</div>';
+  }
+  $('gc-start').onclick=startGauntlet;
+  $('mb-day').textContent = dayOffset===0?'today':dayKey(today());
+}
+
+/* =========================================================================
+   PLAY
+   ========================================================================= */
+let game=null, raf=0;
+function startGauntlet(){
+  const g=todaysGauntlet();
+  game={ key:g.key, probs:g.probs, i:0, t0:performance.now() };
+  $('play-bolt').innerHTML=BOLT;
+  $('play-pips').innerHTML=g.probs.map(()=>'<span class="pip"></span>').join('');
+  renderProblem(); show('screen-play');
+  const inp=$('answer'); inp.value=''; inp.focus(); tick();
+}
+function tick(){ if(!game) return; $('play-time').textContent=fmt(performance.now()-game.t0)+'s'; raf=requestAnimationFrame(tick); }
+function renderProblem(){
+  const p=game.probs[game.i];
+  $('play-problem').textContent=p.display;
+  $('play-count').textContent=(game.i+1)+' / '+N;
+  const pips=$('play-pips').children; for(let k=0;k<pips.length;k++) pips[k].classList.toggle('on', k<game.i);
+}
+$('answer').addEventListener('input',()=>{
+  if(!game) return; const inp=$('answer'), v=inp.value.trim(); if(v===''||v==='-') return;
+  if(Number(v)===game.probs[game.i].correctAnswer){ game.i++; inp.value='';
+    if(game.i>=N){ finish(); return; } renderProblem(); }
+});
+$('btn-quit').onclick=()=>{ cancelAnimationFrame(raf); game=null; show('screen-home'); renderHome(); };
+
+/* =========================================================================
+   FINISH
+   ========================================================================= */
+function finish(){
+  cancelAnimationFrame(raf);
+  const ms=performance.now()-game.t0, k=game.key, firstToday=bestFor(k)==null;
+  const improved=recordClear(k,ms), best=bestFor(k);
+  $('done-time').innerHTML=fmt(ms)+'<small>s</small>';
+  $('done-pb').textContent = firstToday?'First clear today!' : (improved?'New best for today! 🎉':'');
+  $('done-best').textContent=fmt(best)+'s';
+  $('done-streak').textContent=gauntletStreak();
+  $('done-reward').textContent='+'+REWARD_XP;
+  $('done-note').textContent = firstToday
+    ? 'XP reward is a placeholder (+'+REWARD_XP+'). A new set unlocks tomorrow.'
+    : 'Retry — first clear already counted. XP reward is a placeholder.';
+  show('screen-done'); toast('Gauntlet cleared!'); game=null;
+}
+$('btn-retry').onclick=startGauntlet;
+$('btn-home').onclick=()=>{ show('screen-home'); renderHome(); };
+
+/* =========================================================================
+   MOCKUP bar
+   ========================================================================= */
+$('mb-prev').onclick=()=>{ dayOffset--; show('screen-home'); renderHome(); };
+$('mb-next').onclick=()=>{ dayOffset++; show('screen-home'); renderHome(); };
+$('mb-master').onclick=()=>{ masterTodaysSet(); dayOffset++; show('screen-home'); renderHome(); toast('Logged fast clears on those 10 → next day’s set shifts to the new weakest'); };
+$('mb-home').onclick=()=>{ show('screen-home'); renderHome(); };
+$('mb-reset').onclick=()=>{ const o=load(); delete o[dayKey(today())]; save(o); renderHome(); toast('Cleared today’s record'); };
+
+/* ---- boot ---- */
+(function(){ const m=location.hash.match(/d=(-?\d+)/); if(m) dayOffset=Number(m[1]); })();
+seedHistoryOnce();
+renderHome();
+</script>
+</body>
+</html>

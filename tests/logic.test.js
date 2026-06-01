@@ -135,16 +135,16 @@ test('xpForSession is the score; awardXp tracks balance + lifetime', () => {
   assert.equal(p.xpLifetime, 50);
 });
 
-test('buyFreeze enforces cost (500) and the max-held cap (2)', () => {
+test('buyFreeze enforces cost (1000) and the max-held cap (2)', () => {
   const p = Z.defaultProgress();
-  p.xp = 400;
+  p.xp = 900;
   assert.equal(Z.canBuyFreeze(p), false);
   assert.equal(Z.buyFreeze(p), false);                 // too poor
-  p.xp = 1200;
+  p.xp = 2500;
   assert.equal(Z.buyFreeze(p), true);
-  assert.equal(p.xp, 700); assert.equal(p.freezes, 1);
+  assert.equal(p.xp, 1500); assert.equal(p.freezes, 1);
   assert.equal(Z.buyFreeze(p), true);
-  assert.equal(p.xp, 200); assert.equal(p.freezes, 2);
+  assert.equal(p.xp, 500); assert.equal(p.freezes, 2);
   assert.equal(Z.canBuyFreeze(p), false);              // at cap, even if affordable
   p.xp = 5000;
   assert.equal(Z.buyFreeze(p), false);
@@ -356,4 +356,86 @@ test('genProblem never divides by zero even when the mul range admits 0', () => 
     assert.equal(Z.answerFor(p.operation, p.operand1, p.operand2), p.correctAnswer, `bad div: ${p.display}`);
     assert.ok(Number.isInteger(p.correctAnswer), `non-integer div: ${p.display}`);
   }
+});
+
+/* ---- daily gauntlet ---- */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+// problem records for one fact: specs is an array of [ms, wasCorrect]
+function recsFor(op, o1, o2, specs, baseTs) {
+  return specs.map(([ms, ok], i) => ({
+    operation: op, operand1: o1, operand2: o2, correctAnswer: Z.answerFor(op, o1, o2),
+    wasCorrect: ok, msToAnswer: ms, timestamp: (baseTs || 2e12) - 1000 * i,
+  }));
+}
+
+test('recentProblems keeps only problems within the window', () => {
+  const now = 1e12, day = 86400000;
+  const all = [{ timestamp: now }, { timestamp: now - 1 * day },
+               { timestamp: now - 10 * day }, { timestamp: now - 30 * day }];
+  assert.equal(Z.recentProblems(all, now, 21).length, 3);   // drops the 30-day-old one
+  assert.equal(Z.recentProblems(all, now, 0).length, 4);    // no window
+  assert.equal(Z.recentProblems([], now, 21).length, 0);
+});
+
+test('buildGauntlet returns SIZE well-formed facts, weak ones included', () => {
+  const now = 2e12;
+  let hist = [];
+  hist = hist.concat(recsFor(TIMES, 7, 8, [[3200, true], [3400, false], [3100, true], [3300, true]], now));
+  hist = hist.concat(recsFor(DIV, 56, 7, [[3000, true], [3200, true], [3500, false], [3100, true]], now));
+  hist = hist.concat(recsFor(PLUS, 47, 38, [[2800, true], [2900, true], [3000, true]], now));
+  for (let a = 2; a <= 9; a++) hist = hist.concat(recsFor(PLUS, a, a + 1, [[700, true], [720, true], [680, true]], now));
+  const set = Z.buildGauntlet(hist, now, mulberry32(20260601));
+  assert.equal(set.length, Z.GAUNTLET_SIZE);
+  for (const f of set) assert.equal(Z.answerFor(f.operation, f.operand1, f.operand2), f.correctAnswer, f.display);
+  const keys = new Set(set.map(Z.factKey));
+  assert.ok(keys.has(Z.factKey({ operation: TIMES, operand1: 7, operand2: 8 })), '7×8 missing');
+  assert.ok(keys.has(Z.factKey({ operation: DIV, operand1: 56, operand2: 7 })), '56÷7 missing');
+});
+
+test('buildGauntlet tops up to SIZE on thin history (cold start), deterministically', () => {
+  const now = 2e12;
+  const set = Z.buildGauntlet([], now, mulberry32(42));
+  assert.equal(set.length, Z.GAUNTLET_SIZE);
+  for (const f of set) assert.equal(Z.answerFor(f.operation, f.operand1, f.operand2), f.correctAnswer, f.display);
+  const a = Z.buildGauntlet([], now, mulberry32(7)).map(f => f.display);
+  const b = Z.buildGauntlet([], now, mulberry32(7)).map(f => f.display);
+  assert.deepEqual(a, b);   // same seed → same set
+});
+
+test('gauntletStreak counts consecutive cleared days; today-in-progress does not break', () => {
+  const k = (y, m, d) => Z.dayKey(new Date(y, m - 1, d));
+  const today = D(2026, 5, 20);
+  assert.equal(Z.gauntletStreak({ [k(2026,5,18)]:1, [k(2026,5,19)]:1, [k(2026,5,20)]:1 }, today), 3);
+  assert.equal(Z.gauntletStreak({ [k(2026,5,17)]:1, [k(2026,5,18)]:1, [k(2026,5,19)]:1 }, today), 3); // today not done yet
+  assert.equal(Z.gauntletStreak({ [k(2026,5,18)]:1, [k(2026,5,20)]:1 }, today), 1);                  // gap breaks it
+  assert.equal(Z.gauntletStreak({}, today), 0);
+  assert.equal(Z.gauntletStreak(null, today), 0);
+});
+
+test('recordGauntletClear awards once per day and tracks the best time', () => {
+  const p = Z.defaultProgress(), key = '2026-05-20';
+  let r = Z.recordGauntletClear(p, key, 30000);
+  assert.deepEqual([r.firstToday, r.improved, r.reward, r.best], [true, true, Z.GAUNTLET_REWARD, 30000]);
+  assert.equal(p.xp, Z.GAUNTLET_REWARD);
+  r = Z.recordGauntletClear(p, key, 40000);                 // slower retry
+  assert.deepEqual([r.firstToday, r.improved, r.reward, r.best], [false, false, 0, 30000]);
+  assert.equal(p.xp, Z.GAUNTLET_REWARD);                    // no extra XP
+  r = Z.recordGauntletClear(p, key, 25000);                 // faster retry
+  assert.deepEqual([r.improved, r.reward, r.best], [true, 0, 25000]);
+  assert.equal(p.gauntletClears[key], 25000);
+});
+
+test('progress carries gauntletClears through default + normalize', () => {
+  assert.deepEqual(Z.defaultProgress().gauntletClears, {});
+  assert.deepEqual(Z.normalizeProgress(null).gauntletClears, {});
+  assert.deepEqual(Z.normalizeProgress({ gauntletClears: 'bad' }).gauntletClears, {});
+  const keep = { '2026-05-20': 25000 };
+  assert.deepEqual(Z.normalizeProgress({ gauntletClears: keep }).gauntletClears, keep);
 });

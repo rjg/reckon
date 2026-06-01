@@ -353,6 +353,38 @@
   .mastery-legend .lg.m1{background:#ff9aa0;}
   .mastery-legend .lg.m2{background:#ffd479;}
   .mastery-legend .lg.m3{background:#5fce7e;}
+
+  /* ---------- daily gauntlet card ---------- */
+  .gaunt-card{
+    margin:0 16px 18px;padding:15px 16px 14px;border-radius:16px;color:#fff;
+    background:linear-gradient(135deg,#6d5efc 0%,#a855f7 55%,#c645d6 100%);
+    box-shadow:0 6px 18px rgba(109,94,252,.34);position:relative;overflow:hidden;
+  }
+  .gaunt-card::after{content:"";position:absolute;right:-40px;top:-60px;width:160px;height:160px;
+    background:radial-gradient(circle,rgba(255,255,255,.18),transparent 70%);}
+  .gc-head{display:flex;align-items:center;gap:8px;position:relative;}
+  .gc-bolt{display:inline-flex;}
+  .gc-kicker{font-size:11.5px;font-weight:800;letter-spacing:.09em;opacity:.92;}
+  .gc-tag{margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.05em;
+    background:rgba(255,255,255,.22);padding:3px 9px;border-radius:9px;}
+  .gc-tag.done{background:rgba(255,255,255,.92);color:#7c3aed;}
+  .gc-title{font-size:21px;font-weight:800;margin:9px 0 1px;position:relative;letter-spacing:.2px;}
+  .gc-blurb{font-size:12.5px;opacity:.92;position:relative;}
+  .gc-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 2px;position:relative;}
+  .gc-chip{font-size:12px;font-weight:700;background:rgba(255,255,255,.18);padding:4px 9px;
+    border-radius:8px;font-variant-numeric:tabular-nums;}
+  .gc-cta{margin-top:13px;width:100%;padding:13px;border-radius:12px;position:relative;
+    background:rgba(255,255,255,.95);color:#6d28d9;font-weight:800;font-size:16px;
+    display:flex;align-items:center;justify-content:center;gap:7px;touch-action:manipulation;}
+  .gc-cta:active{filter:brightness(.94);}
+  .gc-cta.ghost{background:rgba(255,255,255,.16);color:#fff;}
+  .gc-foot{margin-top:12px;display:flex;align-items:center;gap:7px;font-size:12.5px;opacity:.95;position:relative;}
+  .gc-done-stats{display:flex;align-items:center;gap:16px;margin:11px 0 2px;position:relative;}
+  .gc-stat .k,.gc-reward .k{font-size:11px;opacity:.85;letter-spacing:.04em;}
+  .gc-stat .v{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1;}
+  .gc-reward{margin-left:auto;text-align:right;background:rgba(255,255,255,.16);padding:7px 11px;border-radius:11px;}
+  .gc-reward .v{font-size:17px;font-weight:800;}
+  .res-ghost.info{background:#eef0ff;color:#5b56b8;}
 </style>
 </head>
 <body>
@@ -394,9 +426,7 @@
     <button class="big-btn blue" id="btn-start">Start Game</button>
     <button class="big-btn purple" id="btn-options">Game Options</button>
   </div>
-  <div class="home-actions stack">
-    <button class="big-btn orange" id="btn-challenge"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-3px;margin-right:5px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Challenge &mdash; your hardest facts</button>
-  </div>
+  <div class="gaunt-card" id="gaunt-card"></div>
   <div class="list-head">
     <span>Previous Games</span>
     <span>Sorted by: <span class="sort">Recent</span></span>
@@ -500,8 +530,8 @@
   <button class="sheet-close" data-close>&times;</button>
   <div class="sheet-inner">
     <h1 class="logo">&#8484;<b>etamac</b></h1>
-    <div class="res-score">Score: <span id="res-score">0</span></div>
-    <div class="res-rate">Rate: <span id="res-rate">0</span></div>
+    <div class="res-score"><span id="res-score-label">Score: </span><span id="res-score">0</span></div>
+    <div class="res-rate"><span id="res-rate-label">Rate: </span><span id="res-rate">0</span></div>
     <div id="res-extra" hidden></div>
     <h3>By operation</h3>
     <table class="op-table" id="res-optable"></table>
@@ -595,7 +625,8 @@ const { dayKey, parseKey, addDays, canonFact, factKey, answerFor,
         defaultProgress, normalizeProgress, xpForSession, awardXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt,
         masteryBaseline, masteryGrid, opStats, computeWeakFacts, genProblem, OP_ORDER,
-        DAILY_GOAL, FREEZE_COST, MAX_FREEZES } = Z;
+        buildGauntlet, gauntletStreak, recordGauntletClear,
+        DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD } = Z;
 
 /* ---------- IndexedDB storage ---------- */
 const DB_NAME='zetamac', DB_VERSION=1;
@@ -742,11 +773,8 @@ function P(op,o1,o2,ans,display){
   return {operation:op,operand1:o1,operand2:o2,correctAnswer:ans,display};
 }
 
-/* ---------- challenge: drill your historically hardest facts ---------- */
+/* ---------- weak-fact pool (powers the daily gauntlet queue) ---------- */
 let activePool=null, lastFactKey=null;
-/* weak-fact pool for Challenge, refreshed on every renderHome so startChallenge
-   can run synchronously — its focus() must stay inside the tap gesture (iOS). */
-let challengePool=[];
 /* computeWeakFacts / answerFor / canonFact / factKey live in app-logic.js
    (shared with tests). */
 function genFromPool(){
@@ -832,21 +860,53 @@ function startGame(){
   attachGhost(config.presetName);
 }
 
-/* synchronous so beginGame()'s focus() stays inside the tap gesture and the iOS
-   keyboard opens; the weak-fact pool is precomputed in renderHome. */
-function startChallenge(){
-  const facts=challengePool;
-  if(facts.length<6){ toast('Not enough history yet — play a few games first'); return; }
-  activePool=facts;
-  const ops={add:false,sub:false,mul:false,div:false};
-  const SYM={[PLUS]:'add',[MINUS]:'sub',[TIMES]:'mul',[DIV]:'div'};
-  facts.forEach(f=>{ops[SYM[f.operation]]=true;});
-  beginGame({presetName:'Challenge',durationSec:120,ops,add:R(1,20,1,20),mul:R(1,9,1,9)},null);
-  attachGhost('Challenge');
+/* ---------- daily gauntlet ----------
+   A fixed, race-the-clock set of your 10 weakest facts, snapshotted once per
+   local day (gauntletToday, computed in renderHome) so retries race the SAME
+   set. startGauntlet stays synchronous so beginGauntlet's focus() opens the iOS
+   keyboard inside the tap gesture. Unlike a normal game it counts UP, ends after
+   the last fact, has no ghost, and logs problems (feeding weak facts) but not a
+   session — so it stays out of the streak goal, stats chart, and bests. */
+const BOLT_SVG='<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>';
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function seedFromKey(k){ return Number(String(k).replace(/-/g,'')); }
+let gauntletToday=null;   // { key, facts } — today's snapshot, set in renderHome
+
+function startGauntlet(){
+  if(!gauntletToday||!gauntletToday.facts||!gauntletToday.facts.length){
+    toast('Gauntlet warming up — try again'); return;
+  }
+  activePool=null;
+  beginGauntlet(gauntletToday);
+}
+
+function beginGauntlet(snap){
+  game={
+    sessionId:uuid(), mode:'gauntlet',
+    config:{presetName:'Gauntlet',durationSec:0,ops:{add:false,sub:false,mul:false,div:false},add:R(1,1,1,1),mul:R(1,1,1,1)},
+    facts:snap.facts.slice(), idx:0, gauntletDay:snap.key,
+    problems:[], wrongAnswer:null, ended:false,
+    startedAtISO:new Date().toISOString(), ghost:null,
+  };
+  game.startTime=performance.now();
+  game.current=game.facts[0];
+  game.problemStart=game.startTime;
+  $('game-problem').textContent=game.current.display;
+  $('game-score').textContent='0 / '+game.facts.length;
+  $('game-time').textContent='0.0s';
+  $('game-ghost').hidden=true;
+  $('answer').value='';
+  showScreen('game');
+  $('answer').focus();   /* bring up the native iOS numeric keyboard */
+  game.timer=setInterval(tick,100);
 }
 
 function tick(){
   const elapsed=performance.now()-game.startTime;
+  if(game.mode==='gauntlet'){               // count up; ends on the last fact, no ghost
+    $('game-time').textContent=(elapsed/1000).toFixed(1)+'s';
+    return;
+  }
   const remaining=game.durationMs-elapsed;
   $('game-time').textContent='Time: '+Math.max(0,Math.ceil(remaining/1000));
   if(game.ghost){
@@ -894,6 +954,16 @@ function commitProblem(){
 
 function advance(){
   game.wrongAnswer=null;
+  if(game.mode==='gauntlet'){
+    game.idx++;
+    if(game.idx>=game.facts.length){ endGauntlet().catch(err=>console.error('endGauntlet failed',err)); return; }
+    game.current=game.facts[game.idx];
+    game.problemStart=performance.now();
+    $('answer').value='';
+    $('game-problem').textContent=game.current.display;
+    $('game-score').textContent=game.idx+' / '+game.facts.length;
+    return;
+  }
   game.current=nextFromQueue(game.config);
   game.problemStart=performance.now();
   $('answer').value='';
@@ -957,6 +1027,30 @@ function quitGame(){
   showScreen('home');
 }
 
+async function endGauntlet(){
+  if(!game||game.ended) return;
+  game.ended=true;
+  clearInterval(game.timer);
+  game.elapsedMs=performance.now()-game.startTime;
+  const probs=game.problems;
+  const ms=Math.round(game.elapsedMs);
+  /* mutate progress in memory first (clear time + flat reward) so the results
+     sheet is right even if the write below fails (quota / Private Browsing) */
+  const res=recordGauntletClear(progress,game.gauntletDay,ms);
+  const streak=gauntletStreak(progress.gauntletClears,new Date());
+  try{
+    await Store.addProblems(probs);     // feeds the weak-fact loop + mastery (no session)
+    await Store.saveProgress(progress);
+  }catch(err){
+    console.error('endGauntlet: save failed',err);
+    toast('Could not save this gauntlet');
+  }
+  $('answer').blur();
+  showScreen('home');
+  await renderHome().catch(err=>console.error('endGauntlet: renderHome failed',err));
+  openGauntletResults(probs,{ms,streak,reward:res.reward,best:res.best,firstToday:res.firstToday,improved:res.improved});
+}
+
 /* ===================================================================
    RESULTS
    =================================================================== */
@@ -976,6 +1070,8 @@ function renderOpTable(el,rows){
 }
 
 function openResults(session,problems,extra){
+  $('res-score-label').textContent='Score: ';
+  $('res-rate-label').textContent='Rate: ';
   $('res-score').textContent=session.score;
   $('res-rate').textContent=fmtRate(session.rate);
 
@@ -997,15 +1093,39 @@ function openResults(session,problems,extra){
   renderOpTable($('res-optable'),opStats(problems));
 
   const det=$('res-details');
-  det.innerHTML=problems.map(p=>
+  det.innerHTML=probRowsHTML(problems);
+  det.hidden=true;
+  $('res-toggle').textContent='Details ›';
+
+  openSheet('sheet-results');
+}
+
+/* per-problem detail rows, shared by the normal and gauntlet result sheets */
+function probRowsHTML(problems){
+  return problems.map(p=>
     '<div class="prob-row'+(p.wasCorrect?'':' err')+'">'+
       '<span class="q"><b>'+p.operand1+' '+p.operation+' '+p.operand2+'</b>'+
         '<span class="eq"> = '+p.correctAnswer+'</span></span>'+
       '<span class="t">'+fmtSec(p.msToAnswer)+'</span>'+
     '</div>').join('')||'<div class="muted">No problems.</div>';
-  det.hidden=true;
-  $('res-toggle').textContent='Details ›';
+}
 
+/* gauntlet completion — reuses the results sheet, but the headline is your TIME
+   plus the gauntlet streak and the (placeholder) reward */
+function openGauntletResults(probs,info){
+  $('res-score-label').textContent='Time: ';
+  $('res-rate-label').textContent='';
+  $('res-score').textContent=(info.ms/1000).toFixed(1)+'s';
+  $('res-rate').textContent='Gauntlet — your 10 weakest facts';
+  const best=info.best!=null?(info.best/1000).toFixed(1)+'s':'—';
+  let xh='';
+  if(info.reward) xh+='<span class="res-xp">+'+info.reward+' XP</span>';
+  xh+='<span class="res-ghost win">🔥 Gauntlet streak '+info.streak+'</span>';
+  xh+='<span class="res-ghost info">Best today '+best+(info.improved&&!info.firstToday?' · new best!':'')+'</span>';
+  const ex=$('res-extra'); ex.innerHTML=xh; ex.hidden=false;
+  renderOpTable($('res-optable'),opStats(probs));
+  const det=$('res-details'); det.innerHTML=probRowsHTML(probs); det.hidden=true;
+  $('res-toggle').textContent='Details ›';
   openSheet('sheet-results');
 }
 
@@ -1138,6 +1258,46 @@ async function onBuyFreeze(){
   }
 }
 
+/* ---------- daily gauntlet card ---------- */
+function gauntletBlurb(facts){
+  const NAMES={[PLUS]:'addition',[MINUS]:'subtraction',[TIMES]:'multiplication',[DIV]:'division'};
+  const cnt={};
+  facts.forEach(f=>{cnt[f.operation]=(cnt[f.operation]||0)+1;});
+  const top=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]).slice(0,2).map(o=>NAMES[o]);
+  if(!top.length) return 'a fresh mix &middot; race the clock';
+  return (top.length>1?top[0]+' &amp; '+top[1]+' are your slow spots':top[0]+' is your slow spot')+' &middot; race the clock';
+}
+function renderGauntlet(){
+  const today=new Date(), tkey=dayKey(today);
+  const clears=progress.gauntletClears||{};
+  const best=clears[tkey]!=null?clears[tkey]:null;
+  const streak=gauntletStreak(clears,today);
+  const facts=(gauntletToday&&gauntletToday.facts)||[];
+  const card=$('gaunt-card');
+  const head='<div class="gc-head"><span class="gc-bolt">'+BOLT_SVG+'</span>'+
+    '<span class="gc-kicker">TODAY&rsquo;S GAUNTLET</span>';
+  if(best==null){
+    const chips=facts.slice(0,3).map(f=>'<span class="gc-chip">'+f.display+'</span>').join('');
+    const more=facts.length>3?'<span class="gc-chip">+'+(facts.length-3)+' more</span>':'';
+    card.innerHTML=head+'<span class="gc-tag">NEW</span></div>'+
+      '<div class="gc-title">Your '+GAUNTLET_SIZE+' weakest facts</div>'+
+      '<div class="gc-blurb">'+gauntletBlurb(facts)+'</div>'+
+      '<div class="gc-chips">'+chips+more+'</div>'+
+      '<button class="gc-cta" id="btn-gauntlet">'+BOLT_SVG+' Start &middot; '+GAUNTLET_SIZE+' problems</button>'+
+      '<div class="gc-foot">'+(streak?'🔥 '+streak+'-day gauntlet streak':'Clear it to start a gauntlet streak')+'</div>';
+  }else{
+    card.innerHTML=head+'<span class="gc-tag done">&check; CLEARED</span></div>'+
+      '<div class="gc-title">Your '+GAUNTLET_SIZE+' weakest facts</div>'+
+      '<div class="gc-done-stats">'+
+        '<div class="gc-stat"><div class="k">BEST TODAY</div><div class="v">'+(best/1000).toFixed(1)+'s</div></div>'+
+        '<div class="gc-stat"><div class="k">STREAK</div><div class="v">'+(streak||1)+'</div></div>'+
+        '<div class="gc-reward"><div class="k">EARNED</div><div class="v">+'+GAUNTLET_REWARD+'</div></div>'+
+      '</div>'+
+      '<button class="gc-cta ghost" id="btn-gauntlet">Try for a faster time</button>'+
+      '<div class="gc-foot">New set tomorrow &middot; built from your latest results</div>';
+  }
+}
+
 /* ===================================================================
    HOME — previous games list
    =================================================================== */
@@ -1147,7 +1307,14 @@ async function renderHome(){
   if(reconcileFreezes(counts,progress,new Date(),DAILY_GOAL)>0)
     await Store.saveProgress(progress);
   renderStreak();
-  challengePool=computeWeakFacts(await Store.getProblems(),30);
+  /* snapshot today's gauntlet set once per local day so retries race the same
+     10; it recomputes tomorrow from your latest results */
+  const gkey=dayKey(new Date());
+  if(!gauntletToday||gauntletToday.key!==gkey){
+    const problems=await Store.getProblems();
+    gauntletToday={key:gkey,facts:buildGauntlet(problems,Date.now(),mulberry32(seedFromKey(gkey)))};
+  }
+  renderGauntlet();
   const sessions=(await Store.getSessions())
     .sort((a,b)=>new Date(b.endedAt)-new Date(a.endedAt));
   const list=$('games-list');
@@ -1542,7 +1709,9 @@ async function downloadCSV(){
    WIRING
    =================================================================== */
 $('btn-start').addEventListener('click',startGame);
-$('btn-challenge').addEventListener('click',startChallenge);
+/* the gauntlet CTA is re-created on every renderGauntlet — delegate (the click
+   handler stays inside the tap gesture, so beginGauntlet's focus() opens the keyboard) */
+$('gaunt-card').addEventListener('click',e=>{ if(e.target.closest('#btn-gauntlet')) startGauntlet(); });
 $('btn-options').addEventListener('click',openOptionsMenu);
 $('btn-quit').addEventListener('click',quitGame);
 $('btn-settings').addEventListener('click',()=>{ syncSettings(); openSheet('sheet-settings'); });

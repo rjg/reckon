@@ -21,8 +21,11 @@
 
   /* ---- gamification constants ---- */
   const DAILY_GOAL = 5;     // completed games per local day to "meet" the day
-  const FREEZE_COST = 500;  // XP to buy one streak freeze
+  const FREEZE_COST = 1000; // XP to buy one streak freeze
   const MAX_FREEZES = 2;    // most you can hold at once
+  const GAUNTLET_SIZE = 10;        // problems in the daily gauntlet
+  const GAUNTLET_REWARD = 50;      // flat XP for the first clear of a day (placeholder)
+  const GAUNTLET_WINDOW_DAYS = 21; // recent-history window the weak-fact set is drawn from
 
   /* ---- dates (local-time day keys) ---- */
   function dayKey(d) {
@@ -160,7 +163,7 @@
 
   /* ---- progress / XP ---- */
   function defaultProgress() {
-    return { xp: 0, xpLifetime: 0, freezes: 0, freezeDays: {}, v: 1 };
+    return { xp: 0, xpLifetime: 0, freezes: 0, freezeDays: {}, gauntletClears: {}, v: 1 };
   }
   /* normalize a loaded record so older/partial shapes don't crash callers */
   function normalizeProgress(p) {
@@ -171,6 +174,7 @@
       xpLifetime: Math.max(0, p.xpLifetime | 0),
       freezes: Math.max(0, Math.min(MAX_FREEZES, p.freezes | 0)),
       freezeDays: (p.freezeDays && typeof p.freezeDays === 'object') ? p.freezeDays : {},
+      gauntletClears: (p.gauntletClears && typeof p.gauntletClears === 'object') ? p.gauntletClears : {},
       v: 1,
     };
   }
@@ -317,9 +321,77 @@
     return facts.slice(0, topN);
   }
 
+  /* ---- daily gauntlet ----
+     The gauntlet is your N weakest facts (computeWeakFacts) drawn from a RECENT
+     window of history, so getting fast on a fact actually evicts it and the
+     next-weakest moves in. Cold start: top up with generated problems until
+     there are N. `rng` is injectable so the fill + shuffle are reproducible per
+     day (index.html seeds it by date; tests pass a deterministic rng). */
+  function recentProblems(problems, nowMs, days) {
+    if (!(days > 0)) return (problems || []).slice();
+    const cutoff = nowMs - days * 86400000;
+    return (problems || []).filter(p => (p.timestamp || 0) >= cutoff);
+  }
+  const GAUNTLET_FILL = {
+    ops: { add: true, sub: true, mul: true, div: true },
+    add: { min1: 2, max1: 50, min2: 2, max2: 50 },
+    mul: { min1: 2, max1: 12, min2: 2, max2: 12 },
+  };
+  function buildGauntlet(problems, nowMs, rng, opts) {
+    opts = opts || {};
+    const size = opts.size || GAUNTLET_SIZE;
+    const days = opts.windowDays != null ? opts.windowDays : GAUNTLET_WINDOW_DAYS;
+    const fill = opts.fillCfg || GAUNTLET_FILL;
+    rng = rng || Math.random;
+    const weak = computeWeakFacts(recentProblems(problems, nowMs, days), size);
+    const out = weak.map(f => ({
+      operation: f.operation, operand1: f.operand1, operand2: f.operand2,
+      correctAnswer: f.correctAnswer, display: f.display,
+    }));
+    const seen = new Set(out.map(factKey));
+    let guard = 0;
+    while (out.length < size && guard++ < 500) {        // cold-start top-up
+      const p = genProblem(fill, rng);
+      const k = factKey(p);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({
+        operation: p.operation, operand1: p.operand1, operand2: p.operand2,
+        correctAnswer: p.correctAnswer, display: p.display,
+      });
+    }
+    for (let i = out.length - 1; i > 0; i--) {           // seeded shuffle, stable per day
+      const j = Math.floor(rng() * (i + 1));
+      const t = out[i]; out[i] = out[j]; out[j] = t;
+    }
+    return out;
+  }
+  /* consecutive days with a clear, ending today; today-not-done doesn't break it */
+  function gauntletStreak(clears, today) {
+    if (!clears) return 0;
+    let d = new Date(today);
+    if (clears[dayKey(d)] == null) d = addDays(d, -1);
+    let n = 0;
+    while (clears[dayKey(d)] != null) { n++; d = addDays(d, -1); }
+    return n;
+  }
+  /* record a clear time (ms) for a day; award the flat reward only on the FIRST
+     clear of that day. Mutates progress (gauntletClears, and xp via awardXp). */
+  function recordGauntletClear(progress, key, ms) {
+    progress.gauntletClears = progress.gauntletClears || {};
+    ms = Math.max(0, Math.round(ms));
+    const prev = progress.gauntletClears[key];
+    const firstToday = prev == null;
+    const improved = firstToday || ms < prev;
+    if (improved) progress.gauntletClears[key] = ms;
+    const reward = firstToday ? awardXp(progress, GAUNTLET_REWARD) : 0;
+    return { firstToday, improved, best: progress.gauntletClears[key], reward };
+  }
+
   return {
     PLUS, MINUS, TIMES, DIV, OP_ORDER,
     DAILY_GOAL, FREEZE_COST, MAX_FREEZES,
+    GAUNTLET_SIZE, GAUNTLET_REWARD, GAUNTLET_WINDOW_DAYS,
     dayKey, parseKey, addDays,
     answerFor, canonFact, factKey, genProblem,
     dayCounts, daySatisfied, currentStreak, bestStreak, reconcileFreezes,
@@ -327,5 +399,6 @@
     pickGhost, ghostScoreAt,
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     opStats, computeWeakFacts,
+    recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear,
   };
 });
