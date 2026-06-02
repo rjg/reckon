@@ -1,75 +1,92 @@
 #!/usr/bin/env python3
-"""Generate Reckon PWA icons (pure stdlib — no Pillow needed).
+"""Generate Reckon's PWA icons — the "Zen" identity (needs Pillow).
 
-Draws the four math operators (+ - x /) in a 2x2 grid, white on a full-bleed
-blue square. Full-bleed = safe for both iOS squircle masking and Android
-maskable icons; the operator cluster sits inside the central safe zone.
+The four math operators (+ - x /) in a 2x2 grid, painted in deep ink-green on a
+warm washi-paper field, with a small ume "seal" dot at the lower right like a
+sumi-e hanko stamp. Full-bleed so it's safe for both the iOS squircle and
+Android "maskable" masking — the operator cluster + seal sit inside the central
+safe zone (radius < 40%). Rendered at 4x and downsampled for clean anti-aliasing.
+
+Matches the in-app Zen theme (washi paper + matcha accent). Regenerate with:
+    python3 gen_icons.py            # pip install Pillow, if needed
 
 Layout (reading order):   +  -
                           x  /
 """
-import zlib, struct, os
+import math, os
+from PIL import Image, ImageDraw
 
-BG = (0, 122, 255)      # iOS blue
-FG = (255, 255, 255)    # white glyphs
-SQRT2 = 1.4142135623730951
+SS = 4                          # supersample factor → anti-aliasing on downscale
+
+WASHI_EDGE   = (233, 224, 206)  # paper at the corners (== manifest background_color)
+WASHI_CENTER = (248, 243, 233)  # paper, a touch brighter in the middle
+INK_GREEN    = (47, 74, 42)     # operators — deep ink-green, high contrast on paper
+UME          = (181, 101, 135)  # the seal dot
+
+
+def _lerp(a, b, t):
+    return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def _radial_paper(d, N):
+    """A soft radial wash: brighter centre, even paper colour to every edge."""
+    d.rectangle([0, 0, N, N], fill=WASHI_EDGE)
+    cx = cy = N / 2.0
+    maxR = N * 0.74
+    steps = 280
+    for i in range(steps):
+        t = i / (steps - 1)
+        r = (1 - t) * maxR
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=_lerp(WASHI_EDGE, WASHI_CENTER, t))
+
+
+def _operators(d, N, color, scale=0.52):
+    C = N * scale
+    c0 = (N - C) / 2.0
+    cell = C / 2.0
+    r = cell * 0.34          # glyph half-extent within its cell
+    th = cell * 0.105        # bar half-thickness
+    dotr = cell * 0.12       # divide-dot radius
+    doff = r * 0.60          # divide-dot offset above/below the bar
+    left = c0 + cell * 0.5
+    right = c0 + cell * 1.5
+    top = c0 + cell * 0.5
+    bot = c0 + cell * 1.5
+    # +  (top-left)
+    d.rectangle([left - r, top - th, left + r, top + th], fill=color)
+    d.rectangle([left - th, top - r, left + th, top + r], fill=color)
+    # -  (top-right)
+    d.rectangle([right - r, top - th, right + r, top + th], fill=color)
+    # x  (bottom-left): two diagonal bars
+    for ax, ay, bx, by in [(-r, -r, r, r), (-r, r, r, -r)]:
+        A = (left + ax, bot + ay)
+        B = (left + bx, bot + by)
+        dx, dy = B[0] - A[0], B[1] - A[1]
+        L = math.hypot(dx, dy)
+        nx, ny = -dy / L * th, dx / L * th
+        d.polygon([(A[0] + nx, A[1] + ny), (B[0] + nx, B[1] + ny),
+                   (B[0] - nx, B[1] - ny), (A[0] - nx, A[1] - ny)], fill=color)
+    # /  (bottom-right): bar plus a dot above and below
+    d.rectangle([right - r, bot - th, right + r, bot + th], fill=color)
+    d.ellipse([right - dotr, bot - doff - dotr, right + dotr, bot - doff + dotr], fill=color)
+    d.ellipse([right - dotr, bot + doff - dotr, right + dotr, bot + doff + dotr], fill=color)
+
+
+def _seal(d, N):
+    rr = N * 0.034
+    px, py = N * 0.735, N * 0.735
+    d.ellipse([px - rr, py - rr, px + rr, py + rr], fill=UME)
 
 
 def make_png(path, size):
-    C = size * 0.60                 # operator cluster: centered square, 60% of icon
-    c0 = (size - C) / 2.0
-    cell = C / 2.0                  # each operator gets one 2x2 cell
-    r = cell * 0.34                 # glyph half-extent within its cell
-    th = cell * 0.105               # bar half-thickness (full stroke = 2*th)
-    dotr = cell * 0.12              # divide-dot radius
-    doff = r * 0.60                 # divide-dot offset above/below the bar
-    left = c0 + cell * 0.5          # column centers
-    right = c0 + cell * 1.5
-    top = c0 + cell * 0.5           # row centers
-    bot = c0 + cell * 1.5
-
-    def on(xc, yc):
-        # +  (top-left)
-        dx = xc - left; dy = yc - top
-        if (abs(dy) <= th and abs(dx) <= r) or (abs(dx) <= th and abs(dy) <= r):
-            return True
-        # -  (top-right)
-        dx = xc - right
-        if abs(dy) <= th and abs(dx) <= r:
-            return True
-        # x  (bottom-left): two diagonals, clipped to the glyph box
-        dx = xc - left; dy = yc - bot
-        if abs(dx) <= r and abs(dy) <= r and (
-                abs(dx - dy) <= th * SQRT2 or abs(dx + dy) <= th * SQRT2):
-            return True
-        # /  (bottom-right): bar plus a dot above and below
-        dx = xc - right
-        if (abs(dy) <= th and abs(dx) <= r) or \
-           (dx * dx + (dy + doff) ** 2 <= dotr * dotr) or \
-           (dx * dx + (dy - doff) ** 2 <= dotr * dotr):
-            return True
-        return False
-
-    white = bytes(FG)
-    blue = bytes(BG)
-    raw = bytearray()
-    for y in range(size):
-        raw.append(0)               # PNG filter byte (none)
-        yc = y + 0.5
-        for x in range(size):
-            raw += white if on(x + 0.5, yc) else blue
-
-    def chunk(typ, data):
-        return (struct.pack(">I", len(data)) + typ + data +
-                struct.pack(">I", zlib.crc32(typ + data) & 0xffffffff))
-
-    out = b'\x89PNG\r\n\x1a\n'
-    out += chunk(b'IHDR', struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
-    out += chunk(b'IDAT', zlib.compress(bytes(raw), 9))
-    out += chunk(b'IEND', b'')
-    with open(path, 'wb') as f:
-        f.write(out)
-    print('wrote %s (%dx%d, %d bytes)' % (path, size, size, len(out)))
+    N = size * SS
+    img = Image.new('RGB', (N, N))
+    d = ImageDraw.Draw(img)
+    _radial_paper(d, N)
+    _operators(d, N, INK_GREEN)
+    _seal(d, N)
+    img.resize((size, size), Image.LANCZOS).save(path)
+    print('wrote %s (%dx%d)' % (path, size, size))
 
 
 if __name__ == '__main__':

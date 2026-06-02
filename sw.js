@@ -9,7 +9,7 @@
    You only need to bump CACHE below if you change THIS file's logic
    (or an icon / the manifest). Normal app edits to index.html / app-logic.js
    need nothing — both are served network-first. */
-const CACHE = 'reckon-v6';
+const CACHE = 'reckon-v7';
 const ASSETS = [
   './',
   './index.html',
