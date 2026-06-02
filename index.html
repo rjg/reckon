@@ -115,17 +115,23 @@
 
   /* ---------- home ---------- */
   .home-top{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:calc(env(safe-area-inset-top) + 12px) 18px 4px;
+    display:flex;align-items:center;justify-content:flex-start;gap:8px;
+    padding:calc(env(safe-area-inset-top) + 12px) 16px 4px;
   }
-  .icon-btn{
-    width:40px;height:40px;display:flex;align-items:center;justify-content:center;
-    border-radius:11px;color:var(--muted);
+  /* labeled nav pills — three clear destinations instead of corner icons.
+     Stats + Mastery sit on the left; the Settings gear is pushed to the right. */
+  .nav-btn{
+    display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 14px;
+    border-radius:12px;color:var(--ink-dim);
+    font-family:var(--disp);font-weight:700;font-size:14px;letter-spacing:.2px;
     border:1px solid var(--line);background:var(--panel);
-    transition:color .15s,border-color .15s,transform .1s;
+    transition:color .15s,border-color .15s,background .15s,transform .1s;
   }
-  .icon-btn:active{transform:scale(.92);color:var(--signal-ink);border-color:var(--line-2);}
-  .home-top-left,.home-top-right{display:flex;align-items:center;gap:8px;}
+  .nav-btn svg{color:var(--muted);transition:color .15s;}
+  .nav-btn.icon-only{width:40px;padding:0;justify-content:center;}
+  #btn-settings{margin-left:auto;}
+  .nav-btn:active{transform:scale(.93);color:var(--signal-ink);border-color:var(--line-2);background:var(--panel-2);}
+  .nav-btn:active svg{color:var(--signal-ink);}
 
   .home-title{text-align:center;margin:14px 0 2px;}
   .home-title .logo{
@@ -277,16 +283,30 @@
   }
   .empty{padding:40px 24px;text-align:center;color:var(--muted);font-size:15px;}
 
-  .fab{
-    position:fixed;left:50%;transform:translateX(-50%);
-    bottom:calc(env(safe-area-inset-bottom) + 16px);
-    background:var(--panel);color:var(--ink);font-weight:600;font-size:14px;
-    border:1px solid var(--line-2);
-    padding:12px 20px;border-radius:22px;box-shadow:0 8px 24px rgba(0,0,0,.5);
-    display:flex;align-items:center;gap:8px;z-index:20;
-  }
-  .fab svg{color:var(--signal-ink);}
-  .fab:active{filter:brightness(1.15);transform:translateX(-50%) scale(.96);}
+  /* ---------- hubs (Stats / Settings sheets with a segmented sub-nav) ---------- */
+  .hub-tabs{margin:14px 0 18px;}
+  .hub-tabs button{font-family:var(--disp);font-weight:700;letter-spacing:.2px;font-size:13.5px;}
+  .hub-panel{animation:fadein .26s both cubic-bezier(.2,.7,.2,1);}
+  .hub-panel[hidden]{display:none;}
+  @keyframes fadein{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
+  .hub-note{font-size:12px;color:var(--muted);line-height:1.5;margin:10px 2px 0;}
+  .hub-note b{color:var(--ink-dim);font-weight:700;}
+
+  /* records: headline stat cards */
+  .stat-cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 6px;}
+  .stat-card{background:var(--panel-2);border:1px solid var(--line);border-radius:14px;padding:13px 14px;}
+  .stat-card .k{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;}
+  .stat-card .v{font-family:var(--disp);font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px;line-height:1.05;}
+  .stat-card .s{font-size:11px;color:var(--muted);margin-top:3px;}
+  .stat-card.accent{border-color:var(--signal-ink);
+    background:radial-gradient(120% 100% at 0% 0%,rgba(61,220,132,.12),transparent 62%),var(--panel-2);}
+  .stat-card.accent .v{color:var(--signal-ink);}
+
+  /* mastery: per-operation header above each grid */
+  .m-op{display:flex;align-items:baseline;justify-content:space-between;margin:20px 0 6px;}
+  .m-op-name{font-family:var(--disp);font-size:16px;font-weight:700;}
+  .m-op-name .sym{color:var(--signal-ink);margin-right:7px;}
+  .m-op-meta{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.02em;}
 
   /* ---------- game (the instrument) ---------- */
   .game-top{
@@ -549,41 +569,27 @@
 <!-- ============ HOME ============ -->
 <div class="screen active" id="screen-home">
   <div class="home-top">
-    <div class="home-top-left">
-    <button class="icon-btn" id="btn-settings" aria-label="Settings">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <button class="nav-btn" id="btn-stats" aria-label="Statistics">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="20" x2="18" y2="10"/>
+        <line x1="12" y1="20" x2="12" y2="4"/>
+        <line x1="6" y1="20" x2="6" y2="14"/>
+      </svg><span class="nav-lbl">Stats</span>
+    </button>
+    <button class="nav-btn" id="btn-mastery" aria-label="Mastery">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/>
+        <rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg><span class="nav-lbl">Mastery</span>
+    </button>
+    <button class="nav-btn icon-only" id="btn-settings" aria-label="Settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
     </button>
-      <button class="icon-btn" id="btn-history" aria-label="History">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-      </button>
-    </div>
-    <div class="home-top-right">
-      <button class="icon-btn" id="btn-mastery" aria-label="Mastery">
-        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="3" y="3" width="7" height="7" rx="1"/>
-          <rect x="14" y="3" width="7" height="7" rx="1"/>
-          <rect x="3" y="14" width="7" height="7" rx="1"/>
-          <rect x="14" y="14" width="7" height="7" rx="1"/>
-        </svg>
-      </button>
-      <button class="icon-btn" id="btn-bests" aria-label="Personal bests">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
-          <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
-          <path d="M4 22h16"/>
-          <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
-          <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
-          <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
-        </svg>
-      </button>
-    </div>
   </div>
   <div class="home-title"><span class="logo">Reckon</span></div>
   <div class="streak-card" id="streak-card"></div>
@@ -592,12 +598,6 @@
   </div>
   <div class="backup-nudge" id="backup-nudge" hidden></div>
   <div class="gaunt-card" id="gaunt-card"></div>
-  <button class="fab" id="btn-stats">
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <line x1="18" y1="20" x2="18" y2="10"/>
-      <line x1="12" y1="20" x2="12" y2="4"/>
-      <line x1="6" y1="20" x2="6" y2="14"/>
-    </svg>Statistics</button>
 </div>
 
 <!-- ============ GAME ============ -->
@@ -625,67 +625,114 @@
   <button class="sheet-close" data-close>&times;</button>
   <div class="sheet-inner">
     <h1>Settings</h1>
-
-    <h3>Appearance</h3>
-    <div class="seg" id="theme-seg">
-      <button data-theme-pref="auto">Auto</button>
-      <button data-theme-pref="light">Light</button>
-      <button data-theme-pref="dark">Dark</button>
+    <div class="seg hub-tabs" id="settings-tabs">
+      <button data-ctab="game" class="on">Game</button>
+      <button data-ctab="appearance">Appearance</button>
+      <button data-ctab="data">Data</button>
     </div>
 
-    <h2>Custom Settings</h2>
+    <!-- GAME -->
+    <div class="hub-panel" id="ctab-game">
+      <h3>Operations &amp; ranges</h3>
 
-    <div class="op-row">
-      <div class="op-head">
-        <span class="name">Addition</span>
-        <label class="switch"><input type="checkbox" id="op-add"><span class="slider"></span></label>
+      <div class="op-row">
+        <div class="op-head">
+          <span class="name">Addition</span>
+          <label class="switch"><input type="checkbox" id="op-add"><span class="slider"></span></label>
+        </div>
+        <div class="range">Range: (<input class="rng" id="add-min1" inputmode="numeric"> to
+          <input class="rng" id="add-max1" inputmode="numeric">) + (<input class="rng" id="add-min2" inputmode="numeric"> to
+          <input class="rng" id="add-max2" inputmode="numeric">)</div>
       </div>
-      <div class="range">Range: (<input class="rng" id="add-min1" inputmode="numeric"> to
-        <input class="rng" id="add-max1" inputmode="numeric">) + (<input class="rng" id="add-min2" inputmode="numeric"> to
-        <input class="rng" id="add-max2" inputmode="numeric">)</div>
-    </div>
 
-    <div class="op-row">
-      <div class="op-head">
-        <span class="name">Subtraction</span>
-        <label class="switch"><input type="checkbox" id="op-sub"><span class="slider"></span></label>
+      <div class="op-row">
+        <div class="op-head">
+          <span class="name">Subtraction</span>
+          <label class="switch"><input type="checkbox" id="op-sub"><span class="slider"></span></label>
+        </div>
+        <div class="op-note">Addition problems in reverse</div>
       </div>
-      <div class="op-note">Addition problems in reverse</div>
-    </div>
 
-    <div class="op-row">
-      <div class="op-head">
-        <span class="name">Multiplication</span>
-        <label class="switch"><input type="checkbox" id="op-mul"><span class="slider"></span></label>
+      <div class="op-row">
+        <div class="op-head">
+          <span class="name">Multiplication</span>
+          <label class="switch"><input type="checkbox" id="op-mul"><span class="slider"></span></label>
+        </div>
+        <div class="range">Range: (<input class="rng" id="mul-min1" inputmode="numeric"> to
+          <input class="rng" id="mul-max1" inputmode="numeric">) &times; (<input class="rng" id="mul-min2" inputmode="numeric"> to
+          <input class="rng" id="mul-max2" inputmode="numeric">)</div>
       </div>
-      <div class="range">Range: (<input class="rng" id="mul-min1" inputmode="numeric"> to
-        <input class="rng" id="mul-max1" inputmode="numeric">) &times; (<input class="rng" id="mul-min2" inputmode="numeric"> to
-        <input class="rng" id="mul-max2" inputmode="numeric">)</div>
-    </div>
 
-    <div class="op-row">
-      <div class="op-head">
-        <span class="name">Division</span>
-        <label class="switch"><input type="checkbox" id="op-div"><span class="slider"></span></label>
+      <div class="op-row">
+        <div class="op-head">
+          <span class="name">Division</span>
+          <label class="switch"><input type="checkbox" id="op-div"><span class="slider"></span></label>
+        </div>
+        <div class="op-note">Multiplication problems in reverse</div>
       </div>
-      <div class="op-note">Multiplication problems in reverse</div>
-    </div>
 
-    <div class="duration-row">
-      <span class="lbl">Duration:</span>
-      <span style="display:flex;align-items:center;gap:10px;">
-        <span class="step">
-          <button id="dur-down">&minus;</button>
-          <input id="set-duration" inputmode="numeric">
-          <button id="dur-up">+</button>
+      <div class="duration-row">
+        <span class="lbl">Duration</span>
+        <span style="display:flex;align-items:center;gap:10px;">
+          <span class="step">
+            <button id="dur-down">&minus;</button>
+            <input id="set-duration" inputmode="numeric">
+            <button id="dur-up">+</button>
+          </span>
+          <span class="muted">sec</span>
+          <button class="reset-btn" id="btn-reset">Reset</button>
         </span>
-        <span class="muted">seconds</span>
-        <button class="reset-btn" id="btn-reset">Reset All</button>
-      </span>
+      </div>
+
+      <h3>Presets</h3>
+      <div id="preset-list"></div>
     </div>
 
-    <h2>Preset Configurations</h2>
-    <div id="preset-list"></div>
+    <!-- APPEARANCE -->
+    <div class="hub-panel" id="ctab-appearance" hidden>
+      <h3>Theme</h3>
+      <div class="seg" id="theme-seg">
+        <button data-theme-pref="auto">Auto</button>
+        <button data-theme-pref="light">Light</button>
+        <button data-theme-pref="dark">Dark</button>
+      </div>
+      <p class="hub-note">Auto follows your device&rsquo;s light/dark setting.</p>
+    </div>
+
+    <!-- DATA -->
+    <div class="hub-panel" id="ctab-data" hidden>
+      <h3>Backup &amp; restore</h3>
+      <button class="csv-btn" id="btn-backup">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>Back up everything</button>
+      <button class="csv-btn alt" id="btn-restore">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>Restore from backup</button>
+      <input type="file" id="backup-file" accept="application/json,.json" hidden>
+      <p class="hub-note">One file with <b>everything</b> &mdash; games, stats, XP, streak &amp; freezes. Save it to Files / iCloud Drive and you can restore after a reinstall or on a new device.</p>
+
+      <h3>Spreadsheet export</h3>
+      <button class="csv-btn alt" id="btn-csv">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>Download CSV</button>
+      <button class="csv-btn alt" id="btn-import">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>Import CSV</button>
+      <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
+      <p class="hub-note">Per-problem data for spreadsheets. Import only adds games you don&rsquo;t already have &mdash; it never overwrites or deletes.</p>
+    </div>
   </div>
 </div>
 
@@ -705,61 +752,39 @@
   </div>
 </div>
 
-<!-- stats sheet -->
+<!-- stats sheet (hub: Overview / Records / History) -->
 <div class="sheet" id="sheet-stats">
   <div class="grabber"></div>
   <button class="sheet-close" data-close>&times;</button>
   <div class="sheet-inner">
-    <h1>Statistics</h1>
-    <div class="muted" id="stats-range" style="font-size:13px;">&nbsp;</div>
-    <canvas id="stats-chart"></canvas>
-    <div class="seg" id="stats-period"></div>
-    <div class="chips" id="stats-ops"></div>
-    <h3 id="stats-optable-title">By operation &mdash; all ops</h3>
-    <table class="op-table" id="stats-optable"></table>
-    <div class="muted" id="stats-summary" style="font-size:13px;margin-top:10px;"></div>
+    <h1>Stats</h1>
+    <div class="seg hub-tabs" id="stats-tabs">
+      <button data-stab="overview" class="on">Overview</button>
+      <button data-stab="records">Records</button>
+      <button data-stab="history">History</button>
+    </div>
 
-    <h3>Backup &amp; restore</h3>
-    <button class="csv-btn" id="btn-backup">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>Back up everything</button>
-    <button class="csv-btn alt" id="btn-restore">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="17 8 12 3 7 8"/>
-        <line x1="12" y1="3" x2="12" y2="15"/>
-      </svg>Restore from backup</button>
-    <input type="file" id="backup-file" accept="application/json,.json" hidden>
-    <div class="muted" style="font-size:12px;margin-top:8px;text-align:center;">One file with <b>everything</b> &mdash; games, stats, XP, streak &amp; freezes. Save it to Files / iCloud Drive and you can restore after a reinstall or on a new device.</div>
+    <!-- OVERVIEW -->
+    <div class="hub-panel" id="stab-overview">
+      <div class="muted" id="stats-range" style="font-size:13px;">&nbsp;</div>
+      <canvas id="stats-chart"></canvas>
+      <div class="seg" id="stats-period"></div>
+      <div class="chips" id="stats-ops"></div>
+      <h3 id="stats-optable-title">By operation &mdash; all ops</h3>
+      <table class="op-table" id="stats-optable"></table>
+      <div class="muted" id="stats-summary" style="font-size:13px;margin-top:10px;"></div>
+    </div>
 
-    <h3>Spreadsheet export</h3>
-    <button class="csv-btn" id="btn-csv">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="7 10 12 15 17 10"/>
-        <line x1="12" y1="15" x2="12" y2="3"/>
-      </svg>Download CSV</button>
-    <button class="csv-btn alt" id="btn-import">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="17 8 12 3 7 8"/>
-        <line x1="12" y1="3" x2="12" y2="15"/>
-      </svg>Import CSV</button>
-    <input type="file" id="csv-file" accept=".csv,text/csv" hidden>
-    <div class="muted" style="font-size:12px;margin-top:8px;text-align:center;">Per-problem data for spreadsheets. Import only adds games you don&rsquo;t already have &mdash; it never overwrites or deletes.</div>
-  </div>
-</div>
+    <!-- RECORDS -->
+    <div class="hub-panel" id="stab-records" hidden>
+      <div id="bests-body"></div>
+    </div>
 
-<!-- personal bests sheet -->
-<div class="sheet" id="sheet-bests">
-  <div class="grabber"></div>
-  <button class="sheet-close" data-close>&times;</button>
-  <div class="sheet-inner">
-    <h1>Personal Bests</h1>
-    <div id="bests-body"></div>
+    <!-- HISTORY -->
+    <div class="hub-panel" id="stab-history" hidden>
+      <div class="muted" style="font-size:13px;">Every game you&rsquo;ve played, most recent first. Swipe a row to delete.</div>
+      <div id="games-list"></div>
+    </div>
   </div>
 </div>
 
@@ -769,20 +794,10 @@
   <button class="sheet-close" data-close>&times;</button>
   <div class="sheet-inner">
     <h1>Mastery</h1>
-    <div class="muted" style="font-size:13px;">Fluency heatmap &mdash; facts with both operands &le; 12, graded on your speed &amp; accuracy.</div>
+    <div class="muted" style="font-size:13px;">Fluency map &mdash; facts with both operands &le; 12, graded on your speed &amp; accuracy.</div>
+    <div id="mastery-summary"></div>
     <div class="mastery-legend" id="mastery-legend"></div>
     <div id="mastery-body"></div>
-  </div>
-</div>
-
-<!-- history sheet -->
-<div class="sheet" id="sheet-history">
-  <div class="grabber"></div>
-  <button class="sheet-close" data-close>&times;</button>
-  <div class="sheet-inner">
-    <h1>History</h1>
-    <div class="muted" style="font-size:13px;">Every game you&rsquo;ve played, most recent first.</div>
-    <div id="games-list"></div>
   </div>
 </div>
 
@@ -1821,10 +1836,6 @@ async function renderStats(){
     inProblems.length+' problems'+(allView?' answered all-time':' in this view');
 }
 
-function statRow(label,val){
-  return '<div class="stat-row"><span>'+label+'</span><span class="stat-val">'+val+'</span></div>';
-}
-
 async function renderBests(){
   const sessions=await Store.getSessions();
   const problems=await Store.getProblems();
@@ -1851,11 +1862,14 @@ async function renderBests(){
     if(p.msToAnswer<r.minMs) r.minMs=p.msToAnswer;
     if(!p.wasCorrect) r.errors++;
   }
-  let h='<h3>Overall</h3>';
-  h+=statRow('Best score',bestScore.score+' <span class="muted">('+bestScore.presetName+')</span>');
-  h+=statRow('Best rate',fmtRate(bestRate.rate));
-  h+=statRow('Total games',sessions.length);
-  h+=statRow('Total problems',problems.length);
+  const card=(k,v,s,accent)=>'<div class="stat-card'+(accent?' accent':'')+'">'+
+    '<div class="k">'+k+'</div><div class="v">'+v+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';
+  let h='<div class="stat-cards">'+
+    card('Best score',bestScore.score,bestScore.presetName,true)+
+    card('Best rate',fmtRate(bestRate.rate),'answers / sec')+
+    card('Games',sessions.length,'played')+
+    card('Problems',problems.length,'answered')+
+  '</div>';
   h+='<h3>Best score by preset</h3><table class="op-table">'+
      '<tr><th>Preset</th><th class="num">Score</th><th class="num">Rate</th></tr>';
   for(const k of Object.keys(PRESETS).concat(['Custom'])){
@@ -1899,20 +1913,45 @@ function renderGrid(g){
   }
   return h+'</table>';
 }
+/* tally seen / strong / weak cells in one mastery grid */
+function masteryTally(g){
+  let seen=0,strong=0,weak=0;
+  for(const row of g.cells) for(const c of row){
+    if(!c) continue; seen++;
+    if(c.level===3) strong++; else if(c.level===1) weak++;
+  }
+  return {seen,strong,weak};
+}
 async function renderMastery(){
   const problems=await Store.getProblems();
   $('mastery-legend').innerHTML=
     '<span class="lg m0"></span>Unseen<span class="lg m1"></span>Weak'+
     '<span class="lg m2"></span>OK<span class="lg m3"></span>Strong';
-  const body=$('mastery-body');
+  const summary=$('mastery-summary'), body=$('mastery-body');
   if(!problems.length){
+    summary.innerHTML='';
     body.innerHTML='<p class="muted">No games yet — play to build your mastery map.</p>';
     return;
   }
   const baseline=masteryBaseline(problems);
+  const grids=MASTERY_OPS.map(([op,name])=>{
+    const g=masteryGrid(problems,op,12,baseline);
+    return {op,name,g,t:masteryTally(g)};
+  });
+  const tot={seen:0,strong:0,weak:0};
+  for(const x of grids){ tot.seen+=x.t.seen; tot.strong+=x.t.strong; tot.weak+=x.t.weak; }
+  const pct=tot.seen?Math.round(tot.strong/tot.seen*100):0;
+  summary.innerHTML='<div class="stat-cards">'+
+    '<div class="stat-card accent"><div class="k">Strong</div><div class="v">'+pct+'%</div>'+
+      '<div class="s">of facts practiced</div></div>'+
+    '<div class="stat-card"><div class="k">Facts seen</div><div class="v">'+tot.seen+'</div>'+
+      '<div class="s">'+tot.weak+' still weak</div></div>'+
+  '</div>';
   let h='';
-  for(const [op,name] of MASTERY_OPS)
-    h+='<h3>'+op+' '+name+'</h3>'+renderGrid(masteryGrid(problems,op,12,baseline));
+  for(const x of grids)
+    h+='<div class="m-op"><span class="m-op-name"><span class="sym">'+x.op+'</span>'+x.name+'</span>'+
+       '<span class="m-op-meta">'+(x.t.seen?x.t.strong+' / '+x.t.seen+' strong':'unseen')+'</span></div>'+
+       renderGrid(x.g);
   body.innerHTML=h;
 }
 
@@ -2112,12 +2151,28 @@ $('btn-start').addEventListener('click',startGame);
 /* the gauntlet CTA is re-created on every renderGauntlet — delegate (the click
    handler stays inside the tap gesture, so beginGauntlet's focus() opens the keyboard) */
 $('gaunt-card').addEventListener('click',e=>{ if(e.target.closest('#btn-gauntlet')) startGauntlet(); });
-$('btn-history').addEventListener('click',()=>{ openSheet('sheet-history'); renderHistory(); });
 $('btn-quit').addEventListener('click',quitGame);
-$('btn-settings').addEventListener('click',()=>{ syncSettings(); openSheet('sheet-settings'); });
-$('btn-bests').addEventListener('click',()=>{ openSheet('sheet-bests'); renderBests(); });
+/* The three home destinations. Stats and Settings are hubs with a segmented
+   sub-nav; opening one resets it to its first tab. showStatsTab / showSettingsTab
+   toggle the panels and lazily (re)render whichever one is shown. */
+function showStatsTab(tab){
+  document.querySelectorAll('#stats-tabs button').forEach(b=>b.classList.toggle('on',b.dataset.stab===tab));
+  $('stab-overview').hidden=tab!=='overview';
+  $('stab-records').hidden =tab!=='records';
+  $('stab-history').hidden =tab!=='history';
+  if(tab==='records') renderBests(); else if(tab==='history') renderHistory(); else renderStats();
+}
+function showSettingsTab(tab){
+  document.querySelectorAll('#settings-tabs button').forEach(b=>b.classList.toggle('on',b.dataset.ctab===tab));
+  $('ctab-game').hidden      =tab!=='game';
+  $('ctab-appearance').hidden=tab!=='appearance';
+  $('ctab-data').hidden      =tab!=='data';
+}
+$('stats-tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-stab]'); if(b) showStatsTab(b.dataset.stab); });
+$('settings-tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-ctab]'); if(b) showSettingsTab(b.dataset.ctab); });
+$('btn-stats').addEventListener('click',()=>{ openSheet('sheet-stats'); showStatsTab('overview'); });
 $('btn-mastery').addEventListener('click',()=>{ openSheet('sheet-mastery'); renderMastery(); });
-$('btn-stats').addEventListener('click',()=>{ openSheet('sheet-stats'); renderStats(); });
+$('btn-settings').addEventListener('click',()=>{ syncSettings(); openSheet('sheet-settings'); showSettingsTab('game'); });
 /* the buy-freeze button is re-created on every renderStreak — delegate */
 $('streak-card').addEventListener('click',e=>{ if(e.target.closest('#btn-buy-freeze')) onBuyFreeze(); });
 $('btn-csv').addEventListener('click',downloadCSV);
