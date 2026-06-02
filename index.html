@@ -38,9 +38,8 @@
      adjusts `bottom` to match the keyboard's current height. */
   #screen-game.active{position:fixed;top:0;left:0;right:0;bottom:0;min-height:0;height:auto;}
 
-  /* logo */
-  .logo{font-weight:300;letter-spacing:.5px;}
-  .logo b{font-weight:600;}
+  /* logo — single deliberate wordmark, lowercase, airy tracking */
+  .logo{font-weight:400;letter-spacing:2px;text-transform:lowercase;}
 
   /* ---------- home ---------- */
   .home-top{
@@ -431,7 +430,7 @@
       </button>
     </div>
   </div>
-  <div class="home-title"><span class="logo"><b>R</b>eckon</span></div>
+  <div class="home-title"><span class="logo">Reckon</span></div>
   <div class="app-version" id="app-version"></div>
   <div class="streak-card" id="streak-card"></div>
   <div class="home-actions">
@@ -450,7 +449,7 @@
 <!-- ============ GAME ============ -->
 <div class="screen" id="screen-game">
   <div class="game-top">
-    <span class="logo" style="font-size:22px;"><b>R</b>eckon</span>
+    <span class="logo" style="font-size:22px;">Reckon</span>
     <button class="sheet-close" id="btn-quit" style="position:static;">&times;</button>
   </div>
   <div class="game-body">
@@ -533,7 +532,7 @@
   <div class="grabber"></div>
   <button class="sheet-close" data-close>&times;</button>
   <div class="sheet-inner">
-    <h1 class="logo"><b>R</b>eckon</h1>
+    <h1 class="logo">Reckon</h1>
     <div class="res-score"><span id="res-score-label">Score: </span><span id="res-score">0</span></div>
     <div class="res-rate"><span id="res-rate-label">Rate: </span><span id="res-rate">0</span></div>
     <div id="res-extra" hidden></div>
