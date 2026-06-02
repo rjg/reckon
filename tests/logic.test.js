@@ -358,6 +358,15 @@ test('genProblem never divides by zero even when the mul range admits 0', () => 
   }
 });
 
+test('genProblem returns null when no operation is enabled (no silent fallthrough)', () => {
+  const cfg = {
+    ops: { add: false, sub: false, mul: false, div: false },
+    add: { min1: 1, max1: 9, min2: 1, max2: 9 },
+    mul: { min1: 1, max1: 9, min2: 1, max2: 9 },
+  };
+  assert.equal(Z.genProblem(cfg, Math.random), null);   // not a bogus division
+});
+
 /* ---- daily gauntlet ---- */
 function mulberry32(a) {
   return function () {
@@ -574,4 +583,14 @@ test('shouldBackupNudge fires only with unbacked games, past the stale window, n
   assert.equal(Z.shouldBackupNudge([game(now - 10 * DAY)], { lastBackupAt: now - 5 * DAY }, now, STALE), false);
   // stale + unbacked but snooze still active -> suppressed
   assert.equal(Z.shouldBackupNudge([game(now - DAY)], { lastBackupAt: 0, snoozeUntil: now + DAY }, now, STALE), false);
+});
+
+/* ===================== html escaping ===================== */
+test('escapeHTML neutralizes the five HTML-significant characters', () => {
+  assert.equal(Z.escapeHTML('a"b\'c&d<e>f'), 'a&quot;b&#39;c&amp;d&lt;e&gt;f');
+  assert.equal(Z.escapeHTML('plain text 123'), 'plain text 123');
+  assert.equal(Z.escapeHTML(42), '42');                 // coerces non-strings
+  // a malicious imported sessionId / presetName can't break out of an attribute
+  const out = Z.escapeHTML('"><img src=x onerror=alert(1)>');
+  assert.ok(!out.includes('<') && !out.includes('>') && !out.includes('"'), 'no raw < > " survive');
 });

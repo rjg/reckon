@@ -950,13 +950,13 @@ if(typeof Z==='undefined'){
 
 /* Pure logic shared with the unit tests — see app-logic.js. The DOM /
    IndexedDB glue below calls into these; tests exercise them directly. */
-const { dayKey, parseKey, addDays, canonFact, factKey, answerFor,
+const { dayKey, parseKey, addDays,
         dayCounts, currentStreak, bestStreak, reconcileFreezes,
         defaultProgress, normalizeProgress, xpForSession, awardXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt,
         masteryBaseline, masteryGrid, opStats, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear,
-        parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge,
+        parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
         DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD } = Z;
 
 /* ---------- IndexedDB storage ---------- */
@@ -982,6 +982,9 @@ function openDB(){
     req.onsuccess=()=>resolve(req.result);
     req.onerror=()=>reject(req.error);
   });
+  /* don't cache a failed open — null it so the next Store call retries instead
+     of reusing a permanently-rejected promise */
+  _dbp.catch(()=>{ _dbp=null; });
   return _dbp;
 }
 function reqP(r){return new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
@@ -1106,32 +1109,13 @@ function loadPreset(name){
 }
 loadPreset(DEFAULT_PRESET);
 
-/* ---------- problem generation ---------- */
+/* ---------- problem generation ----------
+   genProblem (config-based) lives in app-logic.js, shared with the tests. */
 function anyOpEnabled(c){return c.ops.add||c.ops.sub||c.ops.mul||c.ops.div;}
-
-/* genProblem (config-based) lives in app-logic.js, shared with tests; the
-   challenge-pool path stays here because it carries module state. */
-function P(op,o1,o2,ans,display){
-  return {operation:op,operand1:o1,operand2:o2,correctAnswer:ans,display};
-}
-
-/* ---------- weak-fact pool (powers the daily gauntlet queue) ---------- */
-let activePool=null, lastFactKey=null;
-/* computeWeakFacts / answerFor / canonFact / factKey live in app-logic.js
-   (shared with tests). */
-function genFromPool(){
-  let pick=activePool[0];
-  for(let i=0;i<8;i++){
-    pick=activePool[Math.floor(Math.random()*activePool.length)];
-    if(activePool.length<2 || factKey(pick)!==lastFactKey) break;
-  }
-  lastFactKey=factKey(pick);
-  return P(pick.operation,pick.operand1,pick.operand2,pick.correctAnswer,pick.display);
-}
 
 /* problem queue — pre-generated so there is never a frame hitch */
 let queue=[];
-function fillQueue(c){ while(queue.length<24) queue.push(activePool?genFromPool():genProblem(c)); }
+function fillQueue(c){ while(queue.length<24) queue.push(genProblem(c)); }
 function nextFromQueue(c){ if(queue.length<6) fillQueue(c); return queue.shift(); }
 
 /* ---------- router ---------- */
@@ -1160,7 +1144,7 @@ function beginGame(cfg,ghost){
     startedAtISO:new Date().toISOString(),
     ghost:ghost||null, ghostShown:-1,
   };
-  queue=[]; lastFactKey=null; fillQueue(cfg);
+  queue=[]; fillQueue(cfg);
   game.startTime=performance.now();
   game.current=nextFromQueue(cfg);
   game.problemStart=game.startTime;
@@ -1194,7 +1178,6 @@ async function attachGhost(presetName){
 
 function startGame(){
   if(!anyOpEnabled(config)){ toast('Enable at least one operation'); return; }
-  activePool=null;
   beginGame(clone(config),null);   // start synchronously so the keyboard opens
   attachGhost(config.presetName);
 }
@@ -1215,7 +1198,6 @@ function startGauntlet(){
   if(!gauntletToday||!gauntletToday.facts||!gauntletToday.facts.length){
     toast('Gauntlet warming up — try again'); return;
   }
-  activePool=null;
   beginGauntlet(gauntletToday);
 }
 
@@ -1592,7 +1574,7 @@ function celebrate(){
 async function onBuyFreeze(){
   if(buyFreeze(progress)){
     await Store.saveProgress(progress);
-    await renderHome();
+    await renderHome().catch(err=>console.error('onBuyFreeze: renderHome failed',err));
     toast('Streak freeze ready');
   }else if(progress.freezes>=MAX_FREEZES){
     toast('You already hold the max of '+MAX_FREEZES);
@@ -1650,7 +1632,7 @@ async function renderHome(){
   const counts=dayCounts(sessions);
   if(reconcileFreezes(counts,progress,new Date(),DAILY_GOAL)>0)
     await Store.saveProgress(progress);
-  renderStreak();
+  renderStreak().catch(err=>console.error('renderStreak failed',err));
   /* snapshot today's gauntlet set once per local day so retries race the same
      10; it recomputes tomorrow from your latest results */
   const gkey=dayKey(new Date());
@@ -1672,8 +1654,8 @@ async function renderHistory(){
     return;
   }
   list.innerHTML=sessions.map(s=>
-    '<div class="game-row" data-id="'+s.sessionId+'">'+
-      '<button class="row-delete" data-del="'+s.sessionId+'" aria-label="Delete">'+
+    '<div class="game-row" data-id="'+escapeHTML(s.sessionId)+'">'+
+      '<button class="row-delete" data-del="'+escapeHTML(s.sessionId)+'" aria-label="Delete">'+
         '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+
         '<polyline points="3 6 5 6 21 6"/>'+
         '<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>'+
@@ -1772,7 +1754,7 @@ function syncThemeColor(){
 }
 /* the canvas chart is drawn imperatively, so repaint it if it's on screen */
 function repaintThemedCanvas(){
-  if($('sheet-stats').classList.contains('open')) renderStats().catch(()=>{});
+  if($('sheet-stats').classList.contains('open')) renderStats().catch(err=>console.error('renderStats failed',err));
 }
 function applyTheme(pref){
   document.documentElement.dataset.theme=resolveTheme(pref);
@@ -2020,7 +2002,7 @@ async function renderBests(){
   const card=(k,v,s,accent)=>'<div class="stat-card'+(accent?' accent':'')+'">'+
     '<div class="k">'+k+'</div><div class="v">'+v+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';
   let h='<div class="stat-cards">'+
-    card('Best score',bestScore.score,bestScore.presetName,true)+
+    card('Best score',bestScore.score,escapeHTML(bestScore.presetName),true)+
     card('Best rate',fmtRate(bestRate.rate),'answers / sec')+
     card('Games',sessions.length,'played')+
     card('Problems',problems.length,'answered')+
@@ -2195,7 +2177,7 @@ async function importCSVFile(file){
   catch(err){ console.error('import: write failed',err); toast('Import failed — storage error'); return; }
   if(!added.games && !added.problems){ toast('Already imported — nothing new'); return; }
   await renderHome().catch(err=>console.error('import: renderHome failed',err));
-  if($('sheet-stats').classList.contains('open')) renderStats();
+  if($('sheet-stats').classList.contains('open')) renderStats().catch(err=>console.error('renderStats failed',err));
   const extra=parsed.skipped?(' · '+parsed.skipped+' rows skipped'):'';
   toast('Imported '+added.games+' game'+(added.games===1?'':'s')+' · '+added.problems+' problems'+extra);
 }
@@ -2263,7 +2245,7 @@ async function restoreBackupFile(file){
   backupState=Object.assign({},backupState,{lastBackupAt:Date.now()});
   Store.saveBackupState(backupState).catch(err=>console.error('restore: backup-state save failed',err));
   await renderHome().catch(err=>console.error('restore: renderHome failed',err));
-  if($('sheet-stats').classList.contains('open')) renderStats();
+  if($('sheet-stats').classList.contains('open')) renderStats().catch(err=>console.error('renderStats failed',err));
   if(added.games||added.problems) toast('Restored '+added.games+' game'+(added.games===1?'':'s')+(progRestored?' + XP/streak':''));
   else if(progRestored) toast('Backup already present — XP/streak refreshed');
   else toast('Nothing new to restore');
@@ -2316,7 +2298,9 @@ function showStatsTab(tab){
   $('stab-records').hidden =tab!=='records';
   $('stab-history').hidden =tab!=='history';
   const si=$('sheet-stats').querySelector('.sheet-inner'); if(si) si.scrollTop=0;
-  if(tab==='records') renderBests(); else if(tab==='history') renderHistory(); else renderStats();
+  if(tab==='records') renderBests().catch(err=>console.error('renderBests failed',err));
+  else if(tab==='history') renderHistory().catch(err=>console.error('renderHistory failed',err));
+  else renderStats().catch(err=>console.error('renderStats failed',err));
 }
 function showSettingsTab(tab){
   document.querySelectorAll('#settings-tabs button').forEach(b=>b.classList.toggle('on',b.dataset.ctab===tab));
@@ -2328,7 +2312,7 @@ function showSettingsTab(tab){
 $('stats-tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-stab]'); if(b) showStatsTab(b.dataset.stab); });
 $('settings-tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-ctab]'); if(b) showSettingsTab(b.dataset.ctab); });
 $('btn-stats').addEventListener('click',()=>{ openSheet('sheet-stats'); showStatsTab('overview'); });
-$('btn-mastery').addEventListener('click',()=>{ openSheet('sheet-mastery'); renderMastery(); });
+$('btn-mastery').addEventListener('click',()=>{ openSheet('sheet-mastery'); renderMastery().catch(err=>console.error('renderMastery failed',err)); });
 $('btn-settings').addEventListener('click',()=>{ syncSettings(); openSheet('sheet-settings'); showSettingsTab('game'); });
 /* the buy-freeze button is re-created on every renderStreak — delegate */
 $('streak-card').addEventListener('click',e=>{ if(e.target.closest('#btn-buy-freeze')) onBuyFreeze(); });
@@ -2344,11 +2328,11 @@ $('backup-nudge').addEventListener('click',e=>{
 });
 $('stats-period').addEventListener('click',e=>{
   const b=e.target.closest('[data-period]'); if(!b) return;
-  statsPeriod=b.dataset.period; renderStats();
+  statsPeriod=b.dataset.period; renderStats().catch(err=>console.error('renderStats failed',err));
 });
 $('stats-ops').addEventListener('click',e=>{
   const b=e.target.closest('[data-ops]'); if(!b) return;
-  statsOps=b.dataset.ops==='*ALL*'?null:b.dataset.ops; renderStats();
+  statsOps=b.dataset.ops==='*ALL*'?null:b.dataset.ops; renderStats().catch(err=>console.error('renderStats failed',err));
 });
 /* iOS/Android keep the layout viewport at full height when the on-screen
    keyboard opens — they overlay it rather than shrink it. Size the game
@@ -2375,7 +2359,7 @@ if(window.visualViewport){
 }
 window.addEventListener('resize',()=>{
   fitGameScreen();
-  if($('sheet-stats').classList.contains('open')) renderStats();
+  if($('sheet-stats').classList.contains('open')) renderStats().catch(err=>console.error('renderStats failed',err));
 });
 $('answer').addEventListener('input',onAnswerInput);
 $('res-toggle').addEventListener('click',()=>{
@@ -2421,7 +2405,7 @@ async function init(){
     console.error('Storage unavailable',err);
     toast('Storage unavailable — progress won’t be saved');
   }
-  await renderHome();
+  await renderHome().catch(err=>console.error('init: renderHome failed',err));
 }
 init();
 </script>

@@ -69,6 +69,7 @@
     const pool = [];
     if (c.ops.add) pool.push('add'); if (c.ops.sub) pool.push('sub');
     if (c.ops.mul) pool.push('mul'); if (c.ops.div) pool.push('div');
+    if (!pool.length) return null;   // no op enabled — don't fall through to a bogus division (callers guard upstream)
     const kind = pool[Math.floor(rng() * pool.length)];
     const a = c.add, m = c.mul;
     if (kind === 'add') {
@@ -563,6 +564,17 @@
     return hasUnbacked && (now - last) >= staleMs;   // last=0 (never) is always stale
   }
 
+  /* ---- html escaping ----
+     Escape the five HTML-significant characters. The UI builds markup with
+     innerHTML; stored strings that can carry arbitrary text — a session's
+     sessionId / presetName, which CSV & JSON import accept verbatim — must pass
+     through this before interpolation, or an imported file could inject markup. */
+  function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
   return {
     PLUS, MINUS, TIMES, DIV, OP_ORDER,
     DAILY_GOAL, FREEZE_COST, MAX_FREEZES,
@@ -575,6 +587,6 @@
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     opStats, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear,
-    parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge,
+    parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
   };
 });
