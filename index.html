@@ -39,7 +39,7 @@
     /* ink */
     --ink:#eceef3; --ink-dim:#b8bdc8; --muted:#7e8492; --faint:#565c69;
     /* accent fills (used as backgrounds, paired with --on-signal etc.) */
-    --signal:#3ddc84; --signal-dim:#2fb568; --on-signal:#06210f;
+    --signal:#39d486; --signal-dim:#2fb568; --on-signal:#06210f;
     --amber:#ff9d3c; --cyan:#4fe0d2; --violet:#9b7bff; --magenta:#e070f0;
     --red:#ff5b51; --ok:#54da8c;
     /* accent-as-text/stroke variants (kept readable on the page bg per theme) */
@@ -48,7 +48,7 @@
     /* tinted surfaces for the frozen day / soft badges */
     --cyan-soft:rgba(79,224,210,.14); --cyan-line:rgba(79,224,210,.4);
     /* accent glows — lit in dark, muted in light */
-    --signal-glow:rgba(61,220,132,.35); --signal-glow-strong:rgba(61,220,132,.8);
+    --signal-glow:rgba(95,231,156,.35); --signal-glow-strong:rgba(95,231,156,.8);
     --amber-glow:rgba(255,157,60,.5);
     /* atmospheric backdrop glows */
     --glow-top:rgba(61,220,132,.10); --glow-bot:rgba(155,123,255,.07);
@@ -140,8 +140,8 @@
   }
   .home-title .logo::after{
     content:"";align-self:baseline;width:.46ch;height:.7em;margin-left:.14em;
-    background:var(--signal);border-radius:1px;
-    box-shadow:0 0 12px rgba(61,220,132,.6);
+    background:var(--signal-ink);border-radius:1px;
+    box-shadow:0 0 12px rgba(95,231,156,.6);
     animation:caret 1.1s steps(1) infinite;
   }
   @keyframes caret{0%,50%{opacity:1;}51%,100%{opacity:0;}}
@@ -153,9 +153,9 @@
     font-family:var(--disp);letter-spacing:.2px;touch-action:manipulation;
     transition:transform .1s,filter .15s;
   }
-  .big-btn.blue{   /* primary "GO" — electric lime, dark ink */
+  .big-btn.blue{   /* primary "GO" — mint signal, dark ink (matches the in-game timer) */
     background:var(--signal);color:var(--on-signal);
-    box-shadow:0 0 0 1px rgba(61,220,132,.5),0 10px 30px -8px rgba(61,220,132,.45),
+    box-shadow:0 0 0 1px rgba(95,231,156,.5),0 10px 30px -8px rgba(95,231,156,.45),
                inset 0 1px 0 rgba(255,255,255,.4);
   }
   .big-btn.purple{background:var(--magenta);color:#180020;}
@@ -528,7 +528,7 @@
   .gc-cta{margin-top:14px;width:100%;padding:14px;border-radius:12px;position:relative;
     background:var(--signal);color:var(--on-signal);font-family:var(--disp);font-weight:800;font-size:16px;
     display:flex;align-items:center;justify-content:center;gap:7px;touch-action:manipulation;
-    box-shadow:0 8px 24px -12px rgba(61,220,132,.6);}
+    box-shadow:0 8px 24px -12px rgba(95,231,156,.6);}
   .gc-cta:active{filter:brightness(1.06);}
   .gc-cta.ghost{background:var(--panel-2);color:var(--ink);border:1px solid var(--line-2);box-shadow:none;}
   .gc-foot{margin-top:13px;display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);position:relative;}
