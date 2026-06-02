@@ -418,6 +418,22 @@ test('buildGauntlet tops up to SIZE on thin history (cold start), deterministica
   assert.deepEqual(a, b);   // same seed → same set
 });
 
+test('buildGauntlet is unchanged by pre-filtering history to its window', () => {
+  // guards the perf change: the home screen now queries only the recent window
+  // (getProblemsSince) instead of all history — must yield the identical set
+  const now = 2e12, day = 86400000;
+  let hist = [];
+  hist = hist.concat(recsFor(TIMES, 7, 8, [[3200, true], [3400, false], [3100, true], [3300, true]], now));
+  hist = hist.concat(recsFor(DIV, 56, 7, [[3000, true], [3200, true], [3500, false], [3100, true]], now));
+  for (let a = 2; a <= 9; a++) hist = hist.concat(recsFor(PLUS, a, a + 1, [[700, true], [720, true], [680, true]], now));
+  const old = recsFor(MINUS, 90, 40, [[5000, false], [5200, false]], now - 40 * day); // outside the window
+  const all = hist.concat(old);
+  const recent = Z.recentProblems(all, now, Z.GAUNTLET_WINDOW_DAYS);
+  const fromAll = Z.buildGauntlet(all, now, mulberry32(20260601)).map(f => f.display);
+  const fromRecent = Z.buildGauntlet(recent, now, mulberry32(20260601)).map(f => f.display);
+  assert.deepEqual(fromRecent, fromAll);   // bounding the DB query to the window changes nothing
+});
+
 test('gauntletStreak counts consecutive cleared days; today-in-progress does not break', () => {
   const k = (y, m, d) => Z.dayKey(new Date(y, m - 1, d));
   const today = D(2026, 5, 20);

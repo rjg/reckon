@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a0b0e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -456,6 +456,10 @@
     transform:translateY(110%);transition:transform .3s cubic-bezier(.32,.72,0,1);
   }
   .sheet.open{transform:translateY(0);}
+  /* the sheet is focused programmatically (tabindex=-1) only to move AT focus
+     into the dialog — it's never tab-reachable, so hide its focus ring; the
+     controls inside keep their own. */
+  .sheet:focus{outline:none;}
   .grabber{width:38px;height:5px;border-radius:3px;background:var(--line-2);margin:9px auto 2px;}
   .sheet-inner{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 20px calc(env(safe-area-inset-bottom) + 28px);}
   /* Hubs hold a constant height so switching tabs never resizes the sheet —
@@ -715,14 +719,14 @@
 <div class="screen" id="screen-game">
   <div class="game-top">
     <span class="logo" style="font-size:22px;">Reckon</span>
-    <button class="sheet-close" id="btn-quit" style="position:static;">&times;</button>
+    <button class="sheet-close" id="btn-quit" style="position:static;" aria-label="Quit game">&times;</button>
   </div>
   <div class="game-body">
     <div class="game-stat" id="game-time">Time: 120</div>
     <div class="game-stat" id="game-score">Score: 0</div>
     <div class="game-ghost" id="game-ghost" hidden></div>
     <div class="problem" id="game-problem">&nbsp;</div>
-    <input id="answer" inputmode="numeric" autocomplete="off" autocorrect="off"
+    <input id="answer" inputmode="numeric" aria-label="Answer" autocomplete="off" autocorrect="off"
            autocapitalize="off" spellcheck="false" placeholder="Answer">
   </div>
 </div>
@@ -731,9 +735,9 @@
 <div id="backdrop"></div>
 
 <!-- settings sheet -->
-<div class="sheet" id="sheet-settings">
+<div class="sheet" id="sheet-settings" role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
   <div class="grabber"></div>
-  <button class="sheet-close" data-close>&times;</button>
+  <button class="sheet-close" data-close aria-label="Close">&times;</button>
   <div class="sheet-inner">
     <h1>Settings</h1>
     <div class="seg hub-tabs" id="settings-tabs">
@@ -786,9 +790,9 @@
         <span class="lbl">Duration</span>
         <span style="display:flex;align-items:center;gap:10px;">
           <span class="step">
-            <button id="dur-down">&minus;</button>
-            <input id="set-duration" inputmode="numeric">
-            <button id="dur-up">+</button>
+            <button id="dur-down" aria-label="Decrease duration">&minus;</button>
+            <input id="set-duration" inputmode="numeric" aria-label="Duration in seconds">
+            <button id="dur-up" aria-label="Increase duration">+</button>
           </span>
           <span class="muted">sec</span>
           <button class="reset-btn" id="btn-reset">Reset</button>
@@ -854,9 +858,9 @@
 </div>
 
 <!-- results sheet -->
-<div class="sheet" id="sheet-results">
+<div class="sheet" id="sheet-results" role="dialog" aria-modal="true" aria-label="Game results" tabindex="-1">
   <div class="grabber"></div>
-  <button class="sheet-close" data-close>&times;</button>
+  <button class="sheet-close" data-close aria-label="Close">&times;</button>
   <div class="sheet-inner">
     <h1 class="logo">Reckon</h1>
     <div class="res-score"><span id="res-score-label">Score: </span><span id="res-score">0</span></div>
@@ -870,9 +874,9 @@
 </div>
 
 <!-- stats sheet (hub: Overview / Records / History) -->
-<div class="sheet" id="sheet-stats">
+<div class="sheet" id="sheet-stats" role="dialog" aria-modal="true" aria-label="Statistics" tabindex="-1">
   <div class="grabber"></div>
-  <button class="sheet-close" data-close>&times;</button>
+  <button class="sheet-close" data-close aria-label="Close">&times;</button>
   <div class="sheet-inner">
     <h1>Stats</h1>
     <div class="seg hub-tabs" id="stats-tabs">
@@ -906,9 +910,9 @@
 </div>
 
 <!-- mastery sheet -->
-<div class="sheet" id="sheet-mastery">
+<div class="sheet" id="sheet-mastery" role="dialog" aria-modal="true" aria-label="Mastery" tabindex="-1">
   <div class="grabber"></div>
-  <button class="sheet-close" data-close>&times;</button>
+  <button class="sheet-close" data-close aria-label="Close">&times;</button>
   <div class="sheet-inner">
     <h1>Mastery</h1>
     <div class="muted" style="font-size:13px;">Fluency map &mdash; facts with both operands &le; 12, graded on your speed &amp; accuracy.</div>
@@ -918,7 +922,7 @@
   </div>
 </div>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script src="app-logic.js"></script>
 <script>
@@ -957,7 +961,7 @@ const { dayKey, parseKey, addDays,
         masteryBaseline, masteryGrid, opStats, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear,
         parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
-        DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD } = Z;
+        DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD, GAUNTLET_WINDOW_DAYS } = Z;
 
 /* ---------- IndexedDB storage ---------- */
 const DB_NAME='reckon', DB_VERSION=1;
@@ -1030,6 +1034,14 @@ const Store={
     t.objectStore('sessions').put(s);
     return txDone(t);
   },
+  async addSessions(arr){           // batch insert in one transaction (import / restore)
+    if(!arr.length) return;
+    const db=await openDB();
+    const t=db.transaction('sessions','readwrite');
+    const os=t.objectStore('sessions');
+    for(const s of arr) os.put(s);
+    return txDone(t);
+  },
   async addProblems(arr){
     if(!arr.length) return;
     const db=await openDB();
@@ -1046,6 +1058,13 @@ const Store={
     const db=await openDB();
     const os=db.transaction('problems','readonly').objectStore('problems');
     return reqP(sessionId?os.index('sessionId').getAll(sessionId):os.getAll());
+  },
+  /* problems on/after a timestamp, via the index — lets the daily gauntlet pull
+     just its recent window instead of loading all history on each cold launch */
+  async getProblemsSince(sinceMs){
+    const db=await openDB();
+    const os=db.transaction('problems','readonly').objectStore('problems');
+    return reqP(os.index('timestamp').getAll(IDBKeyRange.lowerBound(sinceMs)));
   },
   async deleteSession(id){
     const db=await openDB();
@@ -1087,7 +1106,7 @@ function uuid(){
 }
 function $(id){return document.getElementById(id);}
 function fmtSec(ms){return (ms/1000).toFixed(2)+'s';}
-function fmtRate(r){return (r||0).toFixed(6);}
+function fmtRate(r){return (r||0).toFixed(3);}
 function fmtDate(iso){
   const d=new Date(iso);
   const day=d.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
@@ -1123,13 +1142,40 @@ function showScreen(name){
   document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id==='screen-'+name));
   fitGameScreen();
 }
+let _lastFocus=null;
+/* visible, enabled focusables inside an element (skips hidden hub-panels) */
+function focusables(el){
+  return Array.prototype.slice.call(el.querySelectorAll(
+    'button:not([disabled]),a[href],input:not([disabled]),[tabindex]:not([tabindex="-1"])'
+  )).filter(n=>n.getClientRects().length>0);
+}
 function openSheet(id){
-  $(id).classList.add('open');
+  _lastFocus=document.activeElement;
+  const sheet=$(id);
+  sheet.classList.add('open');
   $('backdrop').classList.add('show');
+  sheet.focus();   // role=dialog + tabindex=-1: screen readers announce the sheet
 }
 function closeSheets(){
-  document.querySelectorAll('.sheet.open').forEach(s=>s.classList.remove('open'));
+  const open=Array.prototype.slice.call(document.querySelectorAll('.sheet.open'));
+  const active=document.activeElement;
+  open.forEach(s=>{ s.classList.remove('open'); if(active && s.contains(active)){ try{ active.blur(); }catch(e){} } });
   $('backdrop').classList.remove('show');
+  /* return focus to whatever opened the sheet (keyboard/SR); the blur above keeps
+     focus from lingering on the now-hidden sheet when there's nothing to restore */
+  if(open.length && _lastFocus && _lastFocus!==document.body && _lastFocus.focus){ try{ _lastFocus.focus(); }catch(e){} }
+  _lastFocus=null;
+}
+/* keep Tab focus inside the open sheet (a simple modal focus trap) */
+function trapTab(e){
+  const sheet=document.querySelector('.sheet.open');
+  if(!sheet) return;
+  const f=focusables(sheet);
+  if(!f.length){ e.preventDefault(); sheet.focus(); return; }
+  const first=f[0], last=f[f.length-1], a=document.activeElement;
+  if(e.shiftKey && (a===first||a===sheet)){ e.preventDefault(); last.focus(); }
+  else if(!e.shiftKey && a===last){ e.preventDefault(); first.focus(); }
+  else if(!sheet.contains(a)){ e.preventDefault(); first.focus(); }
 }
 
 /* ===================================================================
@@ -1543,6 +1589,7 @@ async function renderStreak(){
 /* one-shot confetti burst when today's goal is completed */
 function celebrate(){
   toast('Daily goal complete!');
+  if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;  // honor the OS setting — toast only, no confetti
   const cv=document.createElement('canvas'); cv.className='confetti';
   document.body.appendChild(cv);
   const dpr=window.devicePixelRatio||1, W=window.innerWidth, H=window.innerHeight;
@@ -1637,7 +1684,10 @@ async function renderHome(){
      10; it recomputes tomorrow from your latest results */
   const gkey=dayKey(new Date());
   if(!gauntletToday||gauntletToday.key!==gkey){
-    const problems=await Store.getProblems();
+    /* the gauntlet only draws from a recent window, so query by the timestamp
+       index instead of loading every problem ever on each cold launch */
+    const since=Date.now()-GAUNTLET_WINDOW_DAYS*86400000;
+    const problems=await Store.getProblemsSince(since);
     gauntletToday={key:gkey,facts:buildGauntlet(problems,Date.now(),mulberry32(seedFromKey(gkey)))};
   }
   renderGauntlet();
@@ -1754,7 +1804,7 @@ function syncThemeColor(){
 }
 /* the canvas chart is drawn imperatively, so repaint it if it's on screen */
 function repaintThemedCanvas(){
-  if($('sheet-stats').classList.contains('open')) renderStats().catch(err=>console.error('renderStats failed',err));
+  if($('sheet-stats').classList.contains('open')) renderStats({cached:true}).catch(err=>console.error('renderStats failed',err));
 }
 function applyTheme(pref){
   document.documentElement.dataset.theme=resolveTheme(pref);
@@ -1884,6 +1934,10 @@ $('preset-list').addEventListener('click',e=>{
 const PERIOD_DAYS={D:1,W:7,M:30,'6M':182,Y:365,All:Infinity};
 let statsPeriod='All';
 let statsOps=null; // null = all combos; otherwise an opsSig string (may be '' for Mixed)
+/* sessions+problems are loaded once when the Stats sheet opens and reused for
+   pure re-filters (period/ops chips, resize, theme repaint); a fresh render
+   (open, import, restore) reloads and replaces this. */
+let _statsCache=null;
 
 /* read a CSS custom property off :root so canvas drawing tracks the theme */
 function cssVar(name){return getComputedStyle(document.documentElement).getPropertyValue(name).trim();}
@@ -1936,10 +1990,15 @@ function drawChart(sessions){
   ctx.textAlign='right'; ctx.fillText(fd(tMax),cssW-padR,cssH-padB+6);
 }
 
-async function renderStats(){
-  const sessions=(await Store.getSessions())
-    .sort((a,b)=>new Date(a.endedAt)-new Date(b.endedAt));
-  const problems=await Store.getProblems();
+async function renderStats(opts){
+  let data=(opts&&opts.cached&&_statsCache)?_statsCache:null;
+  if(!data){
+    const sessions=(await Store.getSessions())
+      .sort((a,b)=>new Date(a.endedAt)-new Date(b.endedAt));
+    const problems=await Store.getProblems();
+    data=_statsCache={sessions,problems};
+  }
+  const {sessions,problems}=data;
   $('stats-period').innerHTML=Object.keys(PERIOD_DAYS).map(p=>
     '<button class="'+(p===statsPeriod?'on':'')+'" data-period="'+p+'">'+p+'</button>').join('');
   // operation-combination pivot: one chip per distinct set of ops played, most-used first
@@ -2158,7 +2217,7 @@ async function mergeIntoStore(parsed){
     if(haveProblemSid.has(sid)) continue;                  // gauntlet problems already present
     for(const p of looseBySid[sid]) problemsToAdd.push(p);
   }
-  for(const s of sessionsToAdd) await Store.addSession(s);
+  await Store.addSessions(sessionsToAdd);
   await Store.addProblems(problemsToAdd);
   return {games:addedGames, problems:problemsToAdd.length};
 }
@@ -2328,11 +2387,11 @@ $('backup-nudge').addEventListener('click',e=>{
 });
 $('stats-period').addEventListener('click',e=>{
   const b=e.target.closest('[data-period]'); if(!b) return;
-  statsPeriod=b.dataset.period; renderStats().catch(err=>console.error('renderStats failed',err));
+  statsPeriod=b.dataset.period; renderStats({cached:true}).catch(err=>console.error('renderStats failed',err));
 });
 $('stats-ops').addEventListener('click',e=>{
   const b=e.target.closest('[data-ops]'); if(!b) return;
-  statsOps=b.dataset.ops==='*ALL*'?null:b.dataset.ops; renderStats().catch(err=>console.error('renderStats failed',err));
+  statsOps=b.dataset.ops==='*ALL*'?null:b.dataset.ops; renderStats({cached:true}).catch(err=>console.error('renderStats failed',err));
 });
 /* iOS/Android keep the layout viewport at full height when the on-screen
    keyboard opens — they overlay it rather than shrink it. Size the game
@@ -2357,9 +2416,13 @@ if(window.visualViewport){
   visualViewport.addEventListener('resize',fitGameScreen);
   visualViewport.addEventListener('scroll',fitGameScreen);
 }
+let _resizeStatsTimer=null;
 window.addEventListener('resize',()=>{
   fitGameScreen();
-  if($('sheet-stats').classList.contains('open')) renderStats().catch(err=>console.error('renderStats failed',err));
+  if($('sheet-stats').classList.contains('open')){
+    clearTimeout(_resizeStatsTimer);
+    _resizeStatsTimer=setTimeout(()=>renderStats({cached:true}).catch(err=>console.error('renderStats failed',err)),120);
+  }
 });
 $('answer').addEventListener('input',onAnswerInput);
 $('res-toggle').addEventListener('click',()=>{
@@ -2368,7 +2431,10 @@ $('res-toggle').addEventListener('click',()=>{
 });
 $('backdrop').addEventListener('click',closeSheets);
 document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',closeSheets));
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSheets(); });
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ closeSheets(); return; }
+  if(e.key==='Tab') trapTab(e);
+});
 
 /* register the service worker; auto-reload once when a new version takes over */
 if('serviceWorker' in navigator){
