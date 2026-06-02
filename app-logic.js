@@ -326,8 +326,11 @@
      The gauntlet is your N weakest facts (computeWeakFacts) drawn from a RECENT
      window of history, so getting fast on a fact actually evicts it and the
      next-weakest moves in. Cold start: top up with generated problems until
-     there are N. `rng` is injectable so the fill + shuffle are reproducible per
-     day (index.html seeds it by date; tests pass a deterministic rng). */
+     there are N. `rng` is injectable so the cold-start fill is reproducible per
+     day (index.html seeds it by date; tests pass a deterministic rng) — so the
+     SET is stable for the whole day. Presentation ORDER is deliberately NOT
+     fixed here: beginGauntlet shuffles the snapshot with Math.random on every
+     run, so retries can't be won by memorizing the answer sequence. */
   function recentProblems(problems, nowMs, days) {
     if (!(days > 0)) return (problems || []).slice();
     const cutoff = nowMs - days * 86400000;
@@ -338,6 +341,18 @@
     add: { min1: 2, max1: 50, min2: 2, max2: 50 },
     mul: { min1: 2, max1: 12, min2: 2, max2: 12 },
   };
+  /* in-place Fisher–Yates; rng defaults to Math.random. Returns arr. Pulled out
+     so the gauntlet can be SELECTED deterministically (buildGauntlet, seeded by
+     the day) yet PRESENTED in a fresh order each run (beginGauntlet shuffles the
+     day's snapshot with Math.random). */
+  function shuffle(arr, rng) {
+    rng = rng || Math.random;
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
   function buildGauntlet(problems, nowMs, rng, opts) {
     opts = opts || {};
     const size = opts.size || GAUNTLET_SIZE;
@@ -361,11 +376,7 @@
         correctAnswer: p.correctAnswer, display: p.display,
       });
     }
-    for (let i = out.length - 1; i > 0; i--) {           // seeded shuffle, stable per day
-      const j = Math.floor(rng() * (i + 1));
-      const t = out[i]; out[i] = out[j]; out[j] = t;
-    }
-    return out;
+    return out;   // weakest-first; beginGauntlet shuffles a copy per run (see shuffle)
   }
   /* consecutive days with a clear, ending today; today-not-done doesn't break it */
   function gauntletStreak(clears, today) {
@@ -586,7 +597,7 @@
     pickGhost, ghostScoreAt,
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     opStats, computeWeakFacts,
-    recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear,
+    recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
     parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
   };
 });

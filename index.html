@@ -959,7 +959,7 @@ const { dayKey, parseKey, addDays,
         defaultProgress, normalizeProgress, xpForSession, awardXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt,
         masteryBaseline, masteryGrid, opStats, computeWeakFacts, genProblem, OP_ORDER,
-        buildGauntlet, gauntletStreak, recordGauntletClear,
+        buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
         parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
         DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD, GAUNTLET_WINDOW_DAYS } = Z;
 
@@ -1229,9 +1229,11 @@ function startGame(){
 }
 
 /* ---------- daily gauntlet ----------
-   A fixed, race-the-clock set of your 10 weakest facts, snapshotted once per
-   local day (gauntletToday, computed in renderHome) so retries race the SAME
-   set. startGauntlet stays synchronous so beginGauntlet's focus() opens the iOS
+   A race-the-clock set of your 10 weakest facts, snapshotted once per local day
+   (gauntletToday, computed in renderHome) so retries race the SAME set. The set
+   is fixed for the day, but beginGauntlet reshuffles it with Math.random on each
+   run, so the ORDER changes every attempt — you can't just memorize the answer
+   sequence. startGauntlet stays synchronous so beginGauntlet's focus() opens the iOS
    keyboard inside the tap gesture. Unlike a normal game it counts UP, ends after
    the last fact, has no ghost, and logs problems (feeding weak facts) but not a
    session — so it stays out of the streak goal, stats chart, and bests. */
@@ -1251,7 +1253,7 @@ function beginGauntlet(snap){
   game={
     sessionId:uuid(), mode:'gauntlet',
     config:{presetName:'Gauntlet',durationSec:0,ops:{add:false,sub:false,mul:false,div:false},add:R(1,1,1,1),mul:R(1,1,1,1)},
-    facts:snap.facts.slice(), idx:0, gauntletDay:snap.key,
+    facts:shuffle(snap.facts.slice()), idx:0, gauntletDay:snap.key,   /* fresh order each run */
     problems:[], wrongAnswer:null, ended:false,
     startedAtISO:new Date().toISOString(), ghost:null,
   };

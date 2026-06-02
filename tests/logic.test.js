@@ -434,6 +434,29 @@ test('buildGauntlet is unchanged by pre-filtering history to its window', () => 
   assert.deepEqual(fromRecent, fromAll);   // bounding the DB query to the window changes nothing
 });
 
+test('shuffle is an in-place permutation, deterministic under a seeded rng', () => {
+  const src = [10, 20, 30, 40, 50, 60, 70, 80];
+  const a = Z.shuffle(src.slice(), mulberry32(123));
+  const b = Z.shuffle(src.slice(), mulberry32(123));
+  assert.deepEqual(a, b);                                  // same seed -> same order
+  assert.deepEqual(a.slice().sort((x, y) => x - y), src);  // same elements, none lost or added
+  const c = Z.shuffle(src.slice(), mulberry32(999));
+  assert.notDeepEqual(a, c);                               // different seed -> different order
+  const arr = [1, 2, 3];
+  assert.equal(Z.shuffle(arr), arr);                       // shuffles in place, returns the array
+  assert.deepEqual(Z.shuffle([]), []);                     // empty is fine
+  assert.deepEqual(Z.shuffle([9]), [9]);                   // single element unchanged
+});
+
+test('buildGauntlet selects deterministically (order no longer seeded; shuffled per run)', () => {
+  const now = 2e12;
+  const a = Z.buildGauntlet([], now, mulberry32(7));
+  const b = Z.buildGauntlet([], now, mulberry32(7));
+  const keyset = s => new Set(s.map(Z.factKey));
+  assert.deepEqual([...keyset(a)].sort(), [...keyset(b)].sort());  // same seed -> same SET
+  assert.equal(a.length, Z.GAUNTLET_SIZE);
+});
+
 test('gauntletStreak counts consecutive cleared days; today-in-progress does not break', () => {
   const k = (y, m, d) => Z.dayKey(new Date(y, m - 1, d));
   const today = D(2026, 5, 20);
