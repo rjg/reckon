@@ -362,6 +362,9 @@
      a short section just leaves space below instead of making it jump. */
   #sheet-stats.open,#sheet-settings.open{height:92vh;}
   #sheet-stats .sheet-inner,#sheet-settings .sheet-inner{flex:1 1 auto;min-height:0;}
+  /* results drills in ON TOP of the Stats hub (tapping a History row), so it
+     stacks above the other sheets rather than behind them */
+  #sheet-results{z-index:50;}
   .sheet-close{
     position:absolute;top:13px;right:14px;width:30px;height:30px;border-radius:50%;
     background:var(--raise);color:var(--muted);font-size:17px;font-weight:700;z-index:2;
