@@ -358,6 +358,10 @@
   .sheet.open{transform:translateY(0);}
   .grabber{width:38px;height:5px;border-radius:3px;background:var(--line-2);margin:9px auto 2px;}
   .sheet-inner{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 20px calc(env(safe-area-inset-bottom) + 28px);}
+  /* Hubs hold a constant height so switching tabs never resizes the sheet —
+     a short section just leaves space below instead of making it jump. */
+  #sheet-stats.open,#sheet-settings.open{height:92vh;}
+  #sheet-stats .sheet-inner,#sheet-settings .sheet-inner{flex:1 1 auto;min-height:0;}
   .sheet-close{
     position:absolute;top:13px;right:14px;width:30px;height:30px;border-radius:50%;
     background:var(--raise);color:var(--muted);font-size:17px;font-weight:700;z-index:2;
@@ -2160,6 +2164,7 @@ function showStatsTab(tab){
   $('stab-overview').hidden=tab!=='overview';
   $('stab-records').hidden =tab!=='records';
   $('stab-history').hidden =tab!=='history';
+  const si=$('sheet-stats').querySelector('.sheet-inner'); if(si) si.scrollTop=0;
   if(tab==='records') renderBests(); else if(tab==='history') renderHistory(); else renderStats();
 }
 function showSettingsTab(tab){
@@ -2167,6 +2172,7 @@ function showSettingsTab(tab){
   $('ctab-game').hidden      =tab!=='game';
   $('ctab-appearance').hidden=tab!=='appearance';
   $('ctab-data').hidden      =tab!=='data';
+  const si=$('sheet-settings').querySelector('.sheet-inner'); if(si) si.scrollTop=0;
 }
 $('stats-tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-stab]'); if(b) showStatsTab(b.dataset.stab); });
 $('settings-tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-ctab]'); if(b) showSettingsTab(b.dataset.ctab); });
