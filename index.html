@@ -671,9 +671,7 @@ const { dayKey, parseKey, addDays, canonFact, factKey, answerFor,
         DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD } = Z;
 
 /* ---------- IndexedDB storage ---------- */
-/* DB name stays 'zetamac' across the rename to Reckon — changing it would
-   orphan every existing player's saved sessions and progress. */
-const DB_NAME='zetamac', DB_VERSION=1;
+const DB_NAME='reckon', DB_VERSION=1;
 let _dbp=null;
 function openDB(){
   if(_dbp) return _dbp;
