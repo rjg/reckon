@@ -53,6 +53,19 @@ function hostAllowed(hostHeader, allowed) {
   return allowed.has(h);
 }
 
+/* this Mac's Bonjour name (e.g. my-mac.local) — stable across sessions, so it's
+   a nicer thing to bookmark on the phone than the IP, which can change. */
+function bonjourHost() {
+  try {
+    if (process.platform === 'darwin') {
+      const n = require('child_process').execFileSync('scutil', ['--get', 'LocalHostName'], { encoding: 'utf8', timeout: 2000 }).trim();
+      if (n) return n + '.local';
+    }
+  } catch (_) { /* fall back to os.hostname() */ }
+  const h = String(os.hostname() || '').split('.')[0];
+  return h ? h + '.local' : null;
+}
+
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -91,8 +104,10 @@ function startServer() {
     for (const name in ifs) for (const ni of ifs[name])
       if (ni.family === 'IPv4' && !ni.internal) lanIPs.push(ni.address);
   }
+  const localName = lan ? bonjourHost() : null;   // e.g. my-mac.local
   const allowedHosts = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
   lanIPs.forEach(ip => allowedHosts.add(ip));
+  if (localName) allowedHosts.add(localName.toLowerCase());   // allow the .local name (a specific host, not a wildcard)
 
   const clients = new Set();   // open SSE responses (live-reload listeners)
 
@@ -160,7 +175,9 @@ function startServer() {
     console.log('\n  Reckon dev server - live reload on\n');
     console.log('  Local:   http://localhost:' + PORT);
     if (lan) {
-      lanIPs.forEach(ip => console.log('  Network: http://' + ip + ':' + PORT + '   (open this on your phone)'));
+      console.log('\n  On your phone (same Wi-Fi):');
+      if (localName) console.log('    http://' + localName + ':' + PORT + '   <- bookmark this; it stays the same');
+      lanIPs.forEach(ip => console.log('    http://' + ip + ':' + PORT + (localName ? '   (fallback if .local does not resolve)' : '   (open this on your phone)')));
       console.log('\n  WARNING: --lan exposes this server to everyone on your Wi-Fi.');
       console.log('  It serves only this folder, read-only, no dotfiles/.git - but only');
       console.log('  run it on a network you trust.\n');
