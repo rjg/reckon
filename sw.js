@@ -9,7 +9,7 @@
    You only need to bump CACHE below if you change THIS file's logic
    (or an icon / the manifest). Normal app edits to index.html / app-logic.js
    need nothing — both are served network-first. */
-const CACHE = 'reckon-v5';
+const CACHE = 'reckon-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -17,7 +17,9 @@ const ASSETS = [
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/apple-touch-icon.png',
+  './fonts/bricolage.woff2',
+  './fonts/spline-mono.woff2'
 ];
 const NET_TIMEOUT = 3500;   // ms before a slow launch falls back to cache
 
