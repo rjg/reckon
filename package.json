@@ -4,6 +4,8 @@
   "description": "Reckon mental-math PWA — pure logic is unit-tested with node:test (no dependencies).",
   "private": true,
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "dev": "node dev.js",
+    "dev:lan": "node dev.js --lan"
   }
 }
