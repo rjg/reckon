@@ -15,10 +15,15 @@
 <title>Reckon</title>
 <style>
   /* ===================================================================
-     RECKON — "the instrument"
-     Dark precision-trainer aesthetic: graph-paper field, hairline panels,
-     tabular monospace for every number, an electric-lime signal color.
-     Display: Bricolage Grotesque · Data/labels: Spline Sans Mono.
+     RECKON — two palettes, picked in Settings › Appearance:
+       · INSTRUMENT — a dark precision-trainer: graph-paper field, hairline
+         panels, tabular monospace, electric-lime signal. Bricolage Grotesque
+         display + Spline Sans Mono data (the bundled webfonts below).
+       · ZEN — calm & Japanese: sumi ink / washi paper, soft traditional
+         accents, a mincho-serif voice + humanist sans, no grid, no caret.
+         Uses the platform's native Japanese fonts (see the zen tokens) so
+         there's nothing extra to ship.
+     Each palette resolves independently across Light / Dark / Auto.
      =================================================================== */
   @font-face{
     font-family:'Bricolage Grotesque';
@@ -31,27 +36,54 @@
     font-weight:400 700;font-style:normal;font-display:swap;
   }
 
-  /* ===== DARK (default) ===== */
+  /* ===================================================================
+     THEMES — two independent axes, both set on <html> by the pre-paint
+     resolver and the theme module:
+        data-palette = instrument | zen     (the "look")
+        data-theme   = dark | light         (resolved from Auto/Light/Dark)
+     Each palette ships a full DARK block (the base) and a LIGHT override.
+     EVERY colour lives here as a token — nothing colour-related is
+     hard-coded in the rules below. Translucent decorations compose an
+     accent's "-rgb" triple so a tint always tracks the active palette:
+        background: rgb(var(--amber-rgb) / .1);
+     Derived tokens (--cyan-soft/-line, --scrim) reference those triples,
+     so overriding the triple in a palette flows through automatically.
+     =================================================================== */
+
+  /* ===== INSTRUMENT · DARK (default) — the precision instrument:
+     graphite field, hairline panels, electric-lime signal. ===== */
   :root{
     /* surfaces */
     --bg:#0a0b0e; --panel:#13151c; --panel-2:#181b23; --raise:#1f232d;
     --line:#23262f; --line-2:#30343f; --grid:rgba(150,170,200,.035);
     /* ink */
     --ink:#eceef3; --ink-dim:#b8bdc8; --muted:#7e8492; --faint:#565c69;
-    /* accent fills (used as backgrounds, paired with --on-signal etc.) */
-    --signal:#39d486; --signal-dim:#2fb568; --on-signal:#06210f;
+    /* accent fills (backgrounds, each paired with its --on-* ink) */
+    --signal:#39d486; --signal-dim:#2fb568;
     --amber:#ff9d3c; --cyan:#4fe0d2; --violet:#9b7bff; --magenta:#e070f0;
     --red:#ff5b51; --ok:#54da8c;
-    /* accent-as-text/stroke variants (kept readable on the page bg per theme) */
+    /* ink that sits ON an accent fill */
+    --on-signal:#06210f; --on-amber:#1a0e00; --on-cyan:#002222;
+    --on-magenta:#180020; --on-red:#ffffff;
+    /* accent-as-text/stroke variants (kept readable on the page bg) */
     --signal-ink:#5fe79c; --amber-ink:#ff9d3c; --cyan-ink:#4fe0d2;
     --ok-ink:#54da8c; --violet-ink:#9b7bff; --magenta-ink:#e070f0; --red-ink:#ff5b51;
-    /* tinted surfaces for the frozen day / soft badges */
-    --cyan-soft:rgba(79,224,210,.14); --cyan-line:rgba(79,224,210,.4);
-    /* accent glows — lit in dark, muted in light */
+    /* accent RGB triples — composed into translucent tints & glows */
+    --signal-rgb:61 220 132; --ok-rgb:84 218 140; --amber-rgb:255 157 60;
+    --cyan-rgb:79 224 210; --violet-rgb:155 123 255; --magenta-rgb:224 112 240;
+    --red-rgb:255 91 81;
+    /* accent glows — lit in dark, muted/withdrawn in light */
     --signal-glow:rgba(95,231,156,.35); --signal-glow-strong:rgba(95,231,156,.8);
     --amber-glow:rgba(255,157,60,.5);
     /* atmospheric backdrop glows */
     --glow-top:rgba(61,220,132,.10); --glow-bot:rgba(155,123,255,.07);
+    /* mastery heat ramp (m0 = panel-2, m3 = signal-dim) */
+    --m1:#7a342f; --m2:#a8741f;
+    /* depth: shadow colour → derived scrim; button top-gloss; toggle knob */
+    --shadow-rgb:0 0 0; --scrim:rgb(var(--shadow-rgb) / .6);
+    --btn-hi:rgba(255,255,255,.38); --knob:#ffffff;
+    /* tinted surfaces for the frozen day / soft cyan badges (derived) */
+    --cyan-soft:rgb(var(--cyan-rgb) / .14); --cyan-line:rgb(var(--cyan-rgb) / .4);
     /* legacy aliases kept so any stray reference still resolves */
     --blue:var(--signal); --purple:var(--magenta); --green:var(--ok);
     --orange:var(--amber); --card:var(--panel); --ink-soft:var(--ink-dim);
@@ -61,23 +93,91 @@
     --r:16px;
   }
 
-  /* ===== LIGHT — "drafting paper": warm bone field, ink type, deep
-     readable accents, accent fills kept vivid. Applied when JS resolves
-     the saved Auto/Light/Dark preference to data-theme="light". ===== */
-  :root[data-theme="light"]{
+  /* ===== INSTRUMENT · LIGHT — "drafting paper": warm bone field, ink
+     type, deep readable accents, accent fills kept vivid. ===== */
+  :root:not([data-palette="zen"])[data-theme="light"]{
     --bg:#f3efe4; --panel:#fffdf7; --panel-2:#f4f0e5; --raise:#e9e3d4;
     --line:#e4ddcc; --line-2:#d3cab4; --grid:rgba(70,60,35,.06);
     --ink:#1b1a16; --ink-dim:#46443c; --muted:#857f6e; --faint:#b0aa98;
-    --signal:#36c878; --signal-dim:#2fa564; --on-signal:#04230f;
+    --signal:#36c878; --signal-dim:#2fa564;
     --amber:#ff9d3c; --cyan:#3fcfc0; --violet:#9b7bff; --magenta:#e070f0;
     --red:#ff5b51; --ok:#43c97a;
+    --on-signal:#04230f;
     --signal-ink:#1a7a44; --amber-ink:#b5560a; --cyan-ink:#0a8a80;
     --ok-ink:#1c7a3e; --violet-ink:#6a3fe0; --magenta-ink:#b520c8; --red-ink:#cf1f15;
-    --cyan-soft:rgba(10,138,128,.1); --cyan-line:rgba(10,138,128,.32);
+    /* deep teal drives the frozen-day tint so it reads on paper */
+    --cyan-rgb:10 138 128;
     --signal-glow:transparent; --signal-glow-strong:rgba(40,160,90,.25);
     --amber-glow:rgba(255,157,60,.35);
     --glow-top:rgba(61,220,132,.14); --glow-bot:rgba(155,123,255,.06);
   }
+
+  /* ===== ZEN · DARK — "sumi": a warm ink-charcoal night washed with
+     soft, moonlit traditional Japanese colours — matcha & bamboo green,
+     kincha gold, asagi blue, fuji wisteria, ume plum, shu vermilion. ===== */
+  :root[data-palette="zen"]{
+    --bg:#15140f; --panel:#1e1c16; --panel-2:#252219; --raise:#2f2b20;
+    --line:#322e23; --line-2:#46402f; --grid:transparent;
+    --ink:#ece5d4; --ink-dim:#c3baa3; --muted:#8d8675; --faint:#5f5a4b;
+    --signal:#8fbf6f; --signal-dim:#74a257;
+    --amber:#e0b15c; --cyan:#71b9b0; --violet:#a99bcf; --magenta:#cf8aa6;
+    --red:#cf6a52; --ok:#86c07f;
+    --on-signal:#13230d; --on-amber:#241803; --on-cyan:#06201d;
+    --on-magenta:#2a0f1b; --on-red:#fdf3ee;
+    --signal-ink:#a7cf86; --amber-ink:#e3bd6e; --cyan-ink:#86c5bb;
+    --ok-ink:#9bce8f; --violet-ink:#bdb0dd; --magenta-ink:#dba0b8; --red-ink:#e08570;
+    --signal-rgb:143 191 111; --ok-rgb:134 192 127; --amber-rgb:224 177 92;
+    --cyan-rgb:113 185 176; --violet-rgb:169 155 207; --magenta-rgb:207 138 166;
+    --red-rgb:207 106 82;
+    --signal-glow:rgb(var(--signal-rgb) / .22); --signal-glow-strong:rgb(var(--signal-rgb) / .5);
+    --amber-glow:rgb(var(--amber-rgb) / .42);
+    --glow-top:rgb(var(--signal-rgb) / .08); --glow-bot:rgb(var(--violet-rgb) / .05);
+    --m1:#9c6f4e; --m2:#c69a52;
+    --shadow-rgb:18 14 6;
+    --btn-hi:rgba(255,250,235,.26); --knob:#f7f2e6;
+    /* fonts — a sumi-brush mincho for display + a calm humanist sans for
+       text; NO monospace (that read as a computer terminal). iOS & macOS
+       ship these natively, so there's nothing extra to download. */
+    --disp:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Songti SC","Noto Serif JP",serif;
+    --mono:"Hiragino Sans","Hiragino Kaku Gothic ProN",-apple-system,BlinkMacSystemFont,"Noto Sans JP",sans-serif;
+  }
+
+  /* ===== ZEN · LIGHT — "washi": a warm rice-paper field, sumi-ink type,
+     and accents deepened just enough to hold on paper. ===== */
+  :root[data-palette="zen"][data-theme="light"]{
+    --bg:#efe7d5; --panel:#fbf6ea; --panel-2:#f1e9d7; --raise:#e7dcc4;
+    --line:#e2d7bf; --line-2:#cdbf9f; --grid:transparent;
+    --ink:#241f17; --ink-dim:#52493a; --muted:#8a7f66; --faint:#b3a684;
+    --signal:#6fa84f; --signal-dim:#5d9143;
+    --amber:#cf9a3f; --cyan:#3f9b92; --violet:#7d6fb5; --magenta:#b56587;
+    --red:#c2503c; --ok:#5fa256;
+    --on-signal:#0c2410; --on-amber:#2a1c04; --on-cyan:#04201d;
+    --on-magenta:#2a0f1b; --on-red:#fff4f0;
+    --signal-ink:#3c7a34; --amber-ink:#9a6a14; --cyan-ink:#0d7d74;
+    --ok-ink:#3c7a3a; --violet-ink:#5a4b97; --magenta-ink:#9c3f68; --red-ink:#b23c28;
+    /* deepen the triples so tints/edges read on paper */
+    --signal-rgb:111 168 79; --ok-rgb:95 162 86; --amber-rgb:207 154 63;
+    --cyan-rgb:31 124 116; --violet-rgb:125 111 181; --magenta-rgb:181 101 135;
+    --red-rgb:194 80 60;
+    --signal-glow:transparent; --signal-glow-strong:rgb(var(--signal-rgb) / .25);
+    --amber-glow:rgb(var(--amber-rgb) / .3);
+    --glow-top:rgb(var(--signal-rgb) / .12); --glow-bot:rgb(var(--violet-rgb) / .05);
+    --m1:#bd8767; --m2:#d8b066;
+  }
+
+  /* ===== ZEN — shed the remaining "terminal" cues. The blinking caret
+     after the wordmark becomes a small, still sakura dot (a seal / plum
+     blossom); the widest uppercase label tracking relaxes. ===== */
+  :root[data-palette="zen"] .home-title .logo::after{
+    align-self:flex-end;width:.26em;height:.26em;margin:0 0 .18em .16em;
+    border-radius:50%;background:var(--magenta-ink);box-shadow:none;animation:none;
+  }
+  :root[data-palette="zen"] h3{letter-spacing:.05em;}
+  :root[data-palette="zen"] .gc-kicker,
+  :root[data-palette="zen"] .xp-lab,
+  :root[data-palette="zen"] .stat-card .k,
+  :root[data-palette="zen"] .today-lbl{letter-spacing:.06em;}
+
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;height:100%;overflow:hidden;}
   body{
@@ -141,7 +241,7 @@
   .home-title .logo::after{
     content:"";align-self:baseline;width:.46ch;height:.7em;margin-left:.14em;
     background:var(--signal-ink);border-radius:1px;
-    box-shadow:0 0 12px rgba(95,231,156,.6);
+    box-shadow:0 0 12px var(--signal-glow-strong);
     animation:caret 1.1s steps(1) infinite;
   }
   @keyframes caret{0%,50%{opacity:1;}51%,100%{opacity:0;}}
@@ -153,13 +253,13 @@
     font-family:var(--disp);letter-spacing:.2px;touch-action:manipulation;
     transition:transform .1s,filter .15s;
   }
-  .big-btn.blue{   /* primary "GO" — mint signal, dark ink (matches the in-game timer) */
+  .big-btn.blue{   /* primary "GO" — signal fill, dark ink (matches the in-game timer) */
     background:var(--signal);color:var(--on-signal);
-    box-shadow:0 0 0 1px rgba(95,231,156,.5),0 10px 30px -8px rgba(95,231,156,.45),
-               inset 0 1px 0 rgba(255,255,255,.4);
+    box-shadow:0 0 0 1px rgb(var(--signal-rgb) / .5),0 10px 30px -8px rgb(var(--signal-rgb) / .45),
+               inset 0 1px 0 var(--btn-hi);
   }
-  .big-btn.purple{background:var(--magenta);color:#180020;}
-  .big-btn.orange{background:var(--amber);color:#1a0e00;}
+  .big-btn.purple{background:var(--magenta);color:var(--on-magenta);}
+  .big-btn.orange{background:var(--amber);color:var(--on-amber);}
   .big-btn:active{transform:scale(.985);filter:brightness(1.06);}
   .home-actions.stack{padding-top:0;}
 
@@ -201,7 +301,7 @@
   /* streak: danger banner */
   .streak-risk{
     display:flex;align-items:center;gap:9px;margin-top:13px;padding:10px 12px;
-    border-radius:11px;background:rgba(255,157,60,.1);border:1px solid rgba(255,157,60,.28);
+    border-radius:11px;background:rgb(var(--amber-rgb) / .1);border:1px solid rgb(var(--amber-rgb) / .28);
     color:var(--amber-ink);font-size:12.5px;line-height:1.35;
   }
   .streak-risk .risk-ico{display:inline-flex;color:var(--amber-ink);flex:0 0 auto;}
@@ -228,7 +328,7 @@
   .frz-have svg{margin-left:-3px;}
   .frz-buy{
     background:var(--panel-2);color:var(--cyan-ink);font-size:12px;font-weight:600;
-    border:1px solid rgba(79,224,210,.35);padding:6px 11px;border-radius:9px;white-space:nowrap;
+    border:1px solid rgb(var(--cyan-rgb) / .35);padding:6px 11px;border-radius:9px;white-space:nowrap;
   }
   .frz-buy.off{background:var(--panel-2);color:var(--faint);border-color:var(--line);}
   .frz-buy:active{filter:brightness(1.15);}
@@ -245,7 +345,7 @@
   /* backup nudge banner */
   .backup-nudge{
     display:flex;align-items:center;gap:11px;margin:0 16px 14px;padding:12px 13px;
-    background:rgba(79,224,210,.07);border:1px solid rgba(79,224,210,.25);border-radius:13px;
+    background:rgb(var(--cyan-rgb) / .07);border:1px solid rgb(var(--cyan-rgb) / .25);border-radius:13px;
   }
   .backup-nudge[hidden]{display:none;}
   .backup-nudge .bn-ico{display:inline-flex;color:var(--cyan-ink);flex:0 0 auto;}
@@ -253,7 +353,7 @@
   .backup-nudge .bn-title{font-size:14px;font-weight:600;}
   .backup-nudge .bn-sub{font-size:12px;color:var(--muted);}
   .backup-nudge .bn-act{
-    background:var(--cyan);color:#022;font-size:13px;font-weight:700;
+    background:var(--cyan);color:var(--on-cyan);font-size:13px;font-weight:700;
     padding:8px 13px;border-radius:9px;white-space:nowrap;flex:0 0 auto;
   }
   .backup-nudge .bn-act:active{filter:brightness(1.1);}
@@ -279,7 +379,7 @@
   .game-date{font-size:12.5px;color:var(--muted);text-align:right;max-width:48%;}
   .row-delete{
     position:absolute;top:0;right:0;bottom:0;width:84px;background:var(--red);
-    color:#fff;font-size:22px;display:flex;align-items:center;justify-content:center;
+    color:var(--on-red);font-size:22px;display:flex;align-items:center;justify-content:center;
   }
   .empty{padding:40px 24px;text-align:center;color:var(--muted);font-size:15px;}
 
@@ -299,7 +399,7 @@
   .stat-card .v{font-family:var(--disp);font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:3px;line-height:1.05;}
   .stat-card .s{font-size:11px;color:var(--muted);margin-top:3px;}
   .stat-card.accent{border-color:var(--signal-ink);
-    background:radial-gradient(120% 100% at 0% 0%,rgba(61,220,132,.12),transparent 62%),var(--panel-2);}
+    background:radial-gradient(120% 100% at 0% 0%,rgb(var(--signal-rgb) / .12),transparent 62%),var(--panel-2);}
   .stat-card.accent .v{color:var(--signal-ink);}
 
   /* mastery: per-operation header above each grid */
@@ -344,7 +444,7 @@
 
   /* ---------- sheets ---------- */
   #backdrop{
-    position:fixed;inset:0;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;
+    position:fixed;inset:0;background:var(--scrim);opacity:0;pointer-events:none;
     transition:opacity .25s;z-index:30;backdrop-filter:blur(2px);
   }
   #backdrop.show{opacity:1;pointer-events:auto;}
@@ -352,7 +452,7 @@
     position:fixed;left:0;right:0;bottom:0;z-index:40;
     background:var(--panel);border-top:1px solid var(--line-2);border-radius:20px 20px 0 0;
     max-height:92vh;display:flex;flex-direction:column;
-    box-shadow:0 -20px 50px rgba(0,0,0,.5);
+    box-shadow:0 -20px 50px rgb(var(--shadow-rgb) / .5);
     transform:translateY(110%);transition:transform .3s cubic-bezier(.32,.72,0,1);
   }
   .sheet.open{transform:translateY(0);}
@@ -391,7 +491,7 @@
   .slider{position:absolute;inset:0;background:var(--raise);border-radius:31px;transition:.2s;border:1px solid var(--line-2);}
   .slider::before{
     content:"";position:absolute;width:25px;height:25px;left:2px;top:2px;
-    background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.5);
+    background:var(--knob);border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgb(var(--shadow-rgb) / .5);
   }
   .switch input:checked + .slider{background:var(--signal);border-color:transparent;}
   .switch input:checked + .slider::before{transform:translateX(20px);}
@@ -403,13 +503,13 @@
     border:1px solid var(--line-2);
   }
   #set-duration{width:60px;padding:8px 4px;text-align:center;font-size:15px;font-family:var(--mono);border:1px solid var(--line-2);border-radius:8px;background:var(--panel-2);color:var(--ink);}
-  .reset-btn{background:rgba(255,91,81,.12);color:var(--red-ink);font-weight:700;padding:9px 16px;border-radius:10px;font-size:14px;border:1px solid rgba(255,91,81,.3);}
+  .reset-btn{background:rgb(var(--red-rgb) / .12);color:var(--red-ink);font-weight:700;padding:9px 16px;border-radius:10px;font-size:14px;border:1px solid rgb(var(--red-rgb) / .3);}
 
   .preset-card{
     border-radius:13px;padding:14px 15px;margin:11px 0;border:1px solid var(--line);
     background:var(--panel-2);transition:border-color .15s;
   }
-  .preset-card.sel{border-color:var(--signal-ink);box-shadow:0 0 0 1px var(--signal),0 8px 24px -12px rgba(61,220,132,.5);}
+  .preset-card.sel{border-color:var(--signal-ink);box-shadow:0 0 0 1px var(--signal),0 8px 24px -12px rgb(var(--signal-rgb) / .5);}
   .preset-card .pc-top{display:flex;justify-content:space-between;align-items:center;}
   .preset-card .pc-name{font-family:var(--disp);font-size:17px;font-weight:700;}
   .preset-card .badge{
@@ -431,8 +531,8 @@
   .op-table th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;padding:6px 8px;text-transform:uppercase;letter-spacing:.06em;}
   .op-table td{padding:10px 8px;border-top:1px solid var(--line);}
   .op-table td.num{text-align:right;font-variant-numeric:tabular-nums;}
-  .op-table tr.slow td{background:rgba(255,157,60,.1);}
-  .slow-pill{background:var(--amber);color:#1a0e00;font-size:10px;font-weight:700;padding:2px 6px;border-radius:7px;margin-left:6px;text-transform:uppercase;}
+  .op-table tr.slow td{background:rgb(var(--amber-rgb) / .1);}
+  .slow-pill{background:var(--amber);color:var(--on-amber);font-size:10px;font-weight:700;padding:2px 6px;border-radius:7px;margin-left:6px;text-transform:uppercase;}
   .link{color:var(--signal-ink);font-weight:600;font-size:14px;}
   .prob-row{
     display:flex;justify-content:space-between;align-items:center;
@@ -446,18 +546,18 @@
 
   /* results: XP + ghost outcome */
   #res-extra{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px;}
-  .res-xp{background:rgba(255,157,60,.14);color:var(--amber-ink);font-weight:700;font-size:14px;padding:7px 13px;border-radius:10px;border:1px solid rgba(255,157,60,.3);}
+  .res-xp{background:rgb(var(--amber-rgb) / .14);color:var(--amber-ink);font-weight:700;font-size:14px;padding:7px 13px;border-radius:10px;border:1px solid rgb(var(--amber-rgb) / .3);}
   .res-ghost{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;padding:7px 13px;border-radius:10px;}
-  .res-ghost.win{background:rgba(84,218,140,.14);color:var(--ok-ink);border:1px solid rgba(84,218,140,.3);}
-  .res-ghost.lose{background:rgba(255,157,60,.12);color:var(--amber-ink);border:1px solid rgba(255,157,60,.28);}
-  .res-ghost.info{background:rgba(155,123,255,.14);color:var(--violet-ink);border:1px solid rgba(155,123,255,.3);}
+  .res-ghost.win{background:rgb(var(--ok-rgb) / .14);color:var(--ok-ink);border:1px solid rgb(var(--ok-rgb) / .3);}
+  .res-ghost.lose{background:rgb(var(--amber-rgb) / .12);color:var(--amber-ink);border:1px solid rgb(var(--amber-rgb) / .28);}
+  .res-ghost.info{background:rgb(var(--violet-rgb) / .14);color:var(--violet-ink);border:1px solid rgb(var(--violet-rgb) / .3);}
   .res-ghost em{font-style:normal;color:var(--muted);font-weight:500;}
 
   /* stats chart + controls */
   #stats-chart{width:100%;height:170px;display:block;margin:8px 0 4px;}
   .seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:3px;margin:6px 0 4px;}
   .seg button{flex:1;padding:7px 2px;border-radius:7px;font-size:13px;font-weight:600;color:var(--muted);}
-  .seg button.on{background:var(--raise);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.4);}
+  .seg button.on{background:var(--raise);color:var(--ink);box-shadow:0 1px 3px rgb(var(--shadow-rgb) / .4);}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px;}
   .chips button{padding:6px 12px;border-radius:9px;font-size:13px;font-weight:600;background:var(--panel-2);color:var(--muted);border:1px solid var(--line);letter-spacing:.04em;}
   .chips button.on{background:var(--signal);color:var(--on-signal);border-color:transparent;}
@@ -475,7 +575,7 @@
     position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);
     background:var(--raise);color:var(--ink);border:1px solid var(--line-2);
     padding:11px 18px;border-radius:20px;font-size:14px;
-    opacity:0;transition:.25s;z-index:90;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.5);
+    opacity:0;transition:.25s;z-index:90;pointer-events:none;box-shadow:0 8px 24px rgb(var(--shadow-rgb) / .5);
   }
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
@@ -487,32 +587,32 @@
   .m-grid th{font-size:9px;color:var(--muted);font-weight:600;text-align:center;padding:0;height:13px;}
   .m-grid td{border:1.5px solid var(--panel);border-radius:3px;height:0;padding-top:7%;background:var(--panel-2);}
   .m-grid td.m0{background:var(--panel-2);}
-  .m-grid td.m1{background:#7a342f;}
-  .m-grid td.m2{background:#a8741f;}
+  .m-grid td.m1{background:var(--m1);}
+  .m-grid td.m2{background:var(--m2);}
   .m-grid td.m3{background:var(--signal-dim);}
   .mastery-legend{display:flex;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:2px;}
   .mastery-legend .lg{display:inline-block;width:13px;height:13px;border-radius:3px;margin:0 5px 0 12px;}
   .mastery-legend .lg:first-child{margin-left:0;}
   .mastery-legend .lg.m0{background:var(--panel-2);}
-  .mastery-legend .lg.m1{background:#7a342f;}
-  .mastery-legend .lg.m2{background:#a8741f;}
+  .mastery-legend .lg.m1{background:var(--m1);}
+  .mastery-legend .lg.m2{background:var(--m2);}
   .mastery-legend .lg.m3{background:var(--signal-dim);}
 
   /* ---------- daily gauntlet card ---------- */
   .gaunt-card{
     margin:0 16px 18px;padding:16px 17px 15px;border-radius:18px;color:var(--ink);
     background:
-      radial-gradient(130% 85% at 100% -12%, rgba(61,220,132,.13), transparent 56%),
+      radial-gradient(130% 85% at 100% -12%, rgb(var(--signal-rgb) / .13), transparent 56%),
       var(--panel);
-    border:1px solid rgba(61,220,132,.22);
-    box-shadow:0 12px 30px -16px rgba(61,220,132,.35);position:relative;overflow:hidden;
+    border:1px solid rgb(var(--signal-rgb) / .22);
+    box-shadow:0 12px 30px -16px rgb(var(--signal-rgb) / .35);position:relative;overflow:hidden;
   }
   /* faint hazard hatch in the glow corner — a "challenge" texture */
   .gaunt-card::after{content:"";position:absolute;right:-50px;top:-70px;width:200px;height:200px;
     pointer-events:none;border-radius:50%;
     background:
-      repeating-linear-gradient(45deg,rgba(61,220,132,.06) 0 7px,transparent 7px 14px),
-      radial-gradient(circle,rgba(61,220,132,.14),transparent 70%);}
+      repeating-linear-gradient(45deg,rgb(var(--signal-rgb) / .06) 0 7px,transparent 7px 14px),
+      radial-gradient(circle,rgb(var(--signal-rgb) / .14),transparent 70%);}
   .gc-head{display:flex;align-items:center;gap:8px;position:relative;}
   .gc-bolt{display:inline-flex;color:var(--signal-ink);filter:drop-shadow(0 0 6px var(--signal-glow-strong));}
   .gc-kicker{font-size:11px;font-weight:700;letter-spacing:.16em;color:var(--signal-ink);}
@@ -528,7 +628,7 @@
   .gc-cta{margin-top:14px;width:100%;padding:14px;border-radius:12px;position:relative;
     background:var(--signal);color:var(--on-signal);font-family:var(--disp);font-weight:800;font-size:16px;
     display:flex;align-items:center;justify-content:center;gap:7px;touch-action:manipulation;
-    box-shadow:0 8px 24px -12px rgba(95,231,156,.6);}
+    box-shadow:0 8px 24px -12px rgb(var(--signal-rgb) / .6);}
   .gc-cta:active{filter:brightness(1.06);}
   .gc-cta.ghost{background:var(--panel-2);color:var(--ink);border:1px solid var(--line-2);box-shadow:none;}
   .gc-foot{margin-top:13px;display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);position:relative;}
@@ -557,17 +657,20 @@
 
 </style>
 <script>
-/* Resolve the saved Auto/Light/Dark preference and apply it BEFORE first
-   paint, so there's no dark-then-light flash. The full theme module (in the
-   app script) reuses these same rules. */
+/* Resolve the saved palette + Auto/Light/Dark preference and apply both
+   BEFORE first paint, so there's no flash of the wrong theme. The status-bar
+   colour is read straight off the resolved palette's --bg token, so it always
+   matches. The full theme module (in the app script) reuses these same rules. */
 (function(){
   try{
+    var de=document.documentElement;
     var t=localStorage.getItem('reckon-theme')||'auto';
     var light = t==='light' ||
       (t==='auto' && window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches);
-    document.documentElement.dataset.theme = light ? 'light' : 'dark';
+    de.dataset.theme = light ? 'light' : 'dark';
+    de.dataset.palette = localStorage.getItem('reckon-palette')||'instrument';
     var m=document.querySelector('meta[name="theme-color"]');
-    if(m) m.content = light ? '#f3efe4' : '#0a0b0e';
+    if(m){ var bg=getComputedStyle(de).getPropertyValue('--bg').trim(); if(bg) m.content=bg; }
   }catch(e){}
 })();
 </script>
@@ -699,6 +802,12 @@
     <!-- APPEARANCE -->
     <div class="hub-panel" id="ctab-appearance" hidden>
       <h3>Theme</h3>
+      <div class="seg" id="palette-seg">
+        <button data-palette="instrument">Instrument</button>
+        <button data-palette="zen">Zen</button>
+      </div>
+      <p class="hub-note" id="palette-note"></p>
+      <h3>Mode</h3>
       <div class="seg" id="theme-seg">
         <button data-theme-pref="auto">Auto</button>
         <button data-theme-pref="light">Light</button>
@@ -1457,7 +1566,8 @@ function celebrate(){
   const dpr=window.devicePixelRatio||1, W=window.innerWidth, H=window.innerHeight;
   cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
   const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr);
-  const colors=['#3ddc84','#4fe0d2','#ff9d3c','#9b7bff','#e070f0'];
+  /* draw confetti from the live palette so it matches the active theme */
+  const colors=['--ok','--cyan','--amber','--violet','--magenta'].map(v=>cssVar(v)||'#888');
   const parts=[];
   for(let i=0;i<130;i++) parts.push({
     x:W/2+(Math.random()*2-1)*40, y:H*0.30,
@@ -1632,36 +1742,67 @@ async function renderHistory(){
 })();
 
 /* ===================================================================
-   THEME  (Auto / Light / Dark) — persisted in localStorage; resolved to
-   data-theme on <html>. The pre-paint resolver in <head> applies the same
-   rules on boot to avoid a flash; this module handles live switching and
-   following the system when set to Auto.
+   THEME — two independent, persisted preferences:
+     reckon-palette : instrument | zen      (the "look")
+     reckon-theme   : auto | light | dark    (the mode)
+   Both resolve to data-* attributes on <html>. The pre-paint resolver in
+   <head> applies them on boot to avoid a flash; this module handles live
+   switching and following the system when the mode is set to Auto.
    =================================================================== */
 const THEME_KEY='reckon-theme';
+const PALETTE_KEY='reckon-palette';
 const themeMQ=window.matchMedia?matchMedia('(prefers-color-scheme: light)'):null;
+const PALETTES=[
+  {id:'instrument',name:'Instrument',note:'Electric precision — graphite field, neon-lime signal.'},
+  {id:'zen',       name:'Zen',       note:'Calm &amp; Japanese — sumi ink by night, washi paper by day.'},
+];
 function getThemePref(){
   try{ return localStorage.getItem(THEME_KEY)||'auto'; }catch(e){ return 'auto'; }
+}
+function getPalettePref(){
+  try{ return localStorage.getItem(PALETTE_KEY)||'instrument'; }catch(e){ return 'instrument'; }
 }
 function resolveTheme(pref){
   return pref==='light' || (pref==='auto' && themeMQ && themeMQ.matches) ? 'light' : 'dark';
 }
-function applyTheme(pref){
-  const mode=resolveTheme(pref);
-  document.documentElement.dataset.theme=mode;
+/* keep the iOS status-bar / PWA chrome colour matched to the live --bg */
+function syncThemeColor(){
   const m=document.querySelector('meta[name="theme-color"]');
-  if(m) m.content = mode==='light' ? '#f3efe4' : '#0a0b0e';
-  /* the canvas chart is drawn imperatively, so repaint it if it's on screen */
+  if(m){ const bg=cssVar('--bg'); if(bg) m.content=bg; }
+}
+/* the canvas chart is drawn imperatively, so repaint it if it's on screen */
+function repaintThemedCanvas(){
   if($('sheet-stats').classList.contains('open')) renderStats().catch(()=>{});
+}
+function applyTheme(pref){
+  document.documentElement.dataset.theme=resolveTheme(pref);
+  syncThemeColor(); repaintThemedCanvas();
+}
+function applyPalette(pal){
+  document.documentElement.dataset.palette=pal;
+  syncThemeColor(); repaintThemedCanvas();
 }
 function setThemePref(pref){
   try{ localStorage.setItem(THEME_KEY,pref); }catch(e){}
   applyTheme(pref);
   renderThemeSeg();
 }
+function setPalettePref(pal){
+  try{ localStorage.setItem(PALETTE_KEY,pal); }catch(e){}
+  applyPalette(pal);
+  renderPaletteSeg();
+}
 function renderThemeSeg(){
   const pref=getThemePref();
   document.querySelectorAll('#theme-seg button').forEach(b=>
     b.classList.toggle('on', b.dataset.themePref===pref));
+}
+function renderPaletteSeg(){
+  const pal=getPalettePref();
+  document.querySelectorAll('#palette-seg button').forEach(b=>
+    b.classList.toggle('on', b.dataset.palette===pal));
+  const note=$('palette-note'), p=PALETTES.find(x=>x.id===pal);
+  if(note&&p) note.innerHTML=p.note;
 }
 /* when on Auto, follow the system flipping light/dark live */
 if(themeMQ){
@@ -1673,12 +1814,17 @@ $('theme-seg').addEventListener('click',e=>{
   const b=e.target.closest('button[data-theme-pref]'); if(!b) return;
   setThemePref(b.dataset.themePref);
 });
+$('palette-seg').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-palette]'); if(!b) return;
+  setPalettePref(b.dataset.palette);
+});
 
 /* ===================================================================
    SETTINGS
    =================================================================== */
 function syncSettings(){
   renderThemeSeg();
+  renderPaletteSeg();
   $('op-add').checked=config.ops.add;
   $('op-sub').checked=config.ops.sub;
   $('op-mul').checked=config.ops.mul;
@@ -1769,10 +1915,11 @@ function drawChart(sessions){
   ctx.clearRect(0,0,cssW,cssH);
   const cLine=cssVar('--line-2')||'#23262f', cLabel=cssVar('--muted')||'#7e8492',
         cData=cssVar('--signal-ink')||'#5fe79c', cAvg=cssVar('--amber-ink')||'#ff9d3c';
+  const cFont=cssVar('--mono')||'"Spline Sans Mono",monospace';   /* axis labels track the active palette's font */
   const padL=32,padR=14,padT=12,padB=22;
   const plotW=cssW-padL-padR, plotH=cssH-padT-padB;
   if(!sessions.length){
-    ctx.fillStyle=cLabel; ctx.font='13px "Spline Sans Mono",monospace';
+    ctx.fillStyle=cLabel; ctx.font='13px '+cFont;
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText('No games in this period',cssW/2,cssH/2);
     return;
@@ -1784,7 +1931,7 @@ function drawChart(sessions){
   if(tMin===tMax){ tMin-=43200000; tMax+=43200000; }
   const X=t=>padL+(t-tMin)/(tMax-tMin)*plotW;
   const Y=v=>padT+(1-v/yMax)*plotH;
-  ctx.font='10px "Spline Sans Mono",monospace'; ctx.textBaseline='middle';
+  ctx.font='10px '+cFont; ctx.textBaseline='middle';
   for(let i=0;i<=4;i++){
     const v=yMax*i/4, y=Y(v);
     ctx.strokeStyle=cLine; ctx.beginPath();
@@ -1801,7 +1948,7 @@ function drawChart(sessions){
   ctx.stroke();
   ctx.fillStyle=cData;
   sessions.forEach((s,i)=>{ctx.beginPath();ctx.arc(X(times[i]),Y(s.score),3,0,7);ctx.fill();});
-  ctx.fillStyle=cLabel; ctx.textBaseline='top'; ctx.font='10px "Spline Sans Mono",monospace';
+  ctx.fillStyle=cLabel; ctx.textBaseline='top'; ctx.font='10px '+cFont;
   const fd=t=>new Date(t).toLocaleDateString('en-US',{month:'short',day:'numeric'});
   ctx.textAlign='left';  ctx.fillText(fd(tMin),padL,cssH-padB+6);
   ctx.textAlign='right'; ctx.fillText(fd(tMax),cssW-padR,cssH-padB+6);
