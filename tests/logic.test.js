@@ -562,6 +562,73 @@ test('progress carries gauntletClears through default + normalize', () => {
   assert.deepEqual(Z.normalizeProgress({ gauntletClears: keep }).gauntletClears, keep);
 });
 
+/* ---- gauntlet par & medals ---- */
+test('gauntletPar sums per-fact expected times: history median where known, weak default else', () => {
+  const probs = recsFor(TIMES, 7, 8, [[3000, true], [3100, true], [3200, true]]);  // baseline = median = 3100
+  const facts = [{ operation: TIMES, operand1: 7, operand2: 8 },   // in history
+                 { operation: PLUS, operand1: 99, operand2: 99 }]; // not -> weak default
+  const par = Z.gauntletPar(facts, probs);
+  assert.equal(par.baseline, 3100);
+  assert.deepEqual([par.perFact[0].from, par.perFact[0].expMs], ['history', 3100]);
+  assert.deepEqual([par.perFact[1].from, par.perFact[1].expMs], ['default', 4650]); // 1.5 × 3100
+  assert.equal(par.parMs, 7750);
+});
+
+test('gauntletPar clamps each fact and cold-starts cleanly on empty history', () => {
+  const tiny = recsFor(TIMES, 2, 2, [[100, true], [120, true]]);  // median 120 -> floored
+  const par = Z.gauntletPar([{ operation: TIMES, operand1: 2, operand2: 2 }], tiny);
+  assert.equal(par.perFact[0].expMs, 700);                        // PAR_FACT_FLOOR
+  const cold = Z.gauntletPar(                                     // no history at all
+    [{ operation: TIMES, operand1: 6, operand2: 7 }, { operation: DIV, operand1: 42, operand2: 6 }], []);
+  assert.equal(cold.baseline, 2500);                              // PAR_DEFAULT_BASELINE
+  assert.equal(cold.parMs, 7500);                                 // 2 × (2500 × 1.5)
+});
+
+test('medalForTime grades a clear against par', () => {
+  const par = 10000;
+  assert.equal(Z.medalForTime(8000, par), 'gold');     // <= 0.80 × par (par −20%), inclusive
+  assert.equal(Z.medalForTime(8001, par), 'silver');
+  assert.equal(Z.medalForTime(10000, par), 'silver');  // <= par (beat par), inclusive
+  assert.equal(Z.medalForTime(10001, par), 'bronze');
+  assert.equal(Z.medalForTime(5000, 0), 'bronze');     // no usable par -> a clear is bronze
+  assert.deepEqual(Z.medalTargets(10000), { silver: 10000, gold: 8000 });
+  assert.deepEqual(Z.medalTargets(0), { silver: 0, gold: 0 });
+});
+
+test('medalCounts tallies the per-day best-medal map', () => {
+  const m = { d1: 'gold', d2: 'silver', d3: 'gold', d4: 'bronze' };
+  assert.deepEqual(Z.medalCounts(m), { gold: 2, silver: 1, bronze: 1, total: 4 });
+  assert.deepEqual(Z.medalCounts({}), { gold: 0, silver: 0, bronze: 0, total: 0 });
+  assert.deepEqual(Z.medalCounts(null), { gold: 0, silver: 0, bronze: 0, total: 0 });
+});
+
+test('recordGauntletClear tracks best medal and pays XP only for upgrades', () => {
+  const p = Z.defaultProgress(), key = '2026-05-20';
+  let r = Z.recordGauntletClear(p, key, 30000, 'bronze');         // first clear -> bronze
+  assert.deepEqual([r.medal, r.medalImproved, r.reward], ['bronze', true, Z.MEDAL_XP.bronze]);
+  assert.equal(p.xp, 30);
+  r = Z.recordGauntletClear(p, key, 22000, 'gold');              // faster -> upgrade to gold
+  assert.deepEqual([r.medal, r.prevMedal, r.medalImproved, r.reward],
+    ['gold', 'bronze', true, Z.MEDAL_XP.gold - Z.MEDAL_XP.bronze]);
+  assert.equal(p.xp, 75);                                         // 30 + 45, only the delta
+  r = Z.recordGauntletClear(p, key, 21000, 'silver');            // best TIME but lower grade -> no downgrade/pay
+  assert.deepEqual([r.medal, r.medalImproved, r.reward], ['gold', false, 0]);
+  assert.equal(p.xp, 75);
+  assert.equal(p.gauntletClears[key], 21000);                    // best time tracked independently of medal
+});
+
+test('progress carries gauntletMedals through default + normalize + merge', () => {
+  assert.deepEqual(Z.defaultProgress().gauntletMedals, {});
+  assert.deepEqual(Z.normalizeProgress(null).gauntletMedals, {});
+  assert.deepEqual(Z.normalizeProgress({ gauntletMedals: 'bad' }).gauntletMedals, {});
+  const keep = { '2026-05-20': 'gold' };
+  assert.deepEqual(Z.normalizeProgress({ gauntletMedals: keep }).gauntletMedals, keep);
+  const cur = { gauntletMedals: { d1: 'silver', d2: 'gold' } };
+  const inc = { gauntletMedals: { d1: 'gold', d2: 'bronze', d3: 'silver' } };
+  assert.deepEqual(Z.mergeProgress(cur, inc).gauntletMedals,      // keep the higher-ranked per day
+    { d1: 'gold', d2: 'gold', d3: 'silver' });
+});
+
 /* ===================== CSV import ===================== */
 const CSV_HEAD = ['sessionId', 'sessionDate', 'presetName', 'enabledOps', 'addRange', 'mulRange',
   'durationSec', 'operation', 'operand1', 'operand2', 'correctAnswer', 'userAnswer',

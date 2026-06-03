@@ -46,7 +46,31 @@
   would want them to be a surprise to me effectively. And I'd have some sort of
   trophy case or something. 
 
-- [ ] I want to tweak the gauntlet.  I love the mode but it needs something
+- [x] I want to tweak the gauntlet.  I love the mode but it needs something
   else.  Liek why do I keep engaging with it?  How can I make use of those
   problems?  What is the point?  What do I get if I keep getting quicker?  If I
   beat the clock...?
+  → DONE: **Par + medals.** The point was hiding in plain sight — the set changes
+    every day (always your *current* weakest), so the raw clear-time was never
+    comparable day to day, and "get faster" paid nothing. Fixes:
+    • **Par** — a per-day target built from how long THESE facts actually take you
+      (per-fact median of your recent solves, weak-default where unseen; sums to
+      ~your honest pace on the set). Now "beat the clock" means the same thing on
+      every set, easy or brutal. Shown on the card: "Par 22.5s · gold under 18.0s".
+    • **Medals** grade each run vs par — gold (par −20%) · silver (beat par) ·
+      bronze (clear it). The medal is the payoff for speed, and it's *collectable*:
+      a lifetime gold/silver/bronze tally on the card turns the gauntlet from a
+      maintenance loop into a campaign (chase gold today, grow the collection
+      forever). Results sheet now leads with the medal you earned + par delta.
+    • **XP follows speed** — first clear pays the tier's value (30/50/75); a later
+      run that *upgrades* the day's medal pays only the difference, so chasing gold
+      mid-day still rewards but re-clearing can't farm XP. (Replaces the flat +50.)
+    Why it answers the Qs: you keep engaging to chase gold + grow the tally; the
+    weak problems now *pay out* when you get fast on them (and still get evicted as
+    you improve); beating the clock = a real, named target (par) with a medal.
+    Pure gauntletPar / medalForTime / medalTargets / medalCounts + medal-aware
+    recordGauntletClear live in app-logic.js, unit-tested; medal metals are theme
+    tokens (gold/silver/bronze × 4 palettes). Verified end-to-end in headless
+    Chrome (pre-clear / gold·silver·bronze results / cleared, dark + light).
+    Open choice for you: the medal *colours* (I picked metallic tones per theme) —
+    happy to tweak; see the screenshots.

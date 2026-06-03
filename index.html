@@ -79,6 +79,9 @@
     --glow-top:rgba(61,220,132,.10); --glow-bot:rgba(155,123,255,.07);
     /* mastery heat ramp (m0 = panel-2, m3 = signal-dim) */
     --m1:#7a342f; --m2:#a8741f;
+    /* gauntlet medals — semantic metals (like the timer ring's green/amber/red),
+       tuned per theme so they read on that background */
+    --medal-gold:#f3c46a; --medal-silver:#c2ccdc; --medal-bronze:#cf8a55;
     /* depth: shadow colour → derived scrim; button top-gloss; toggle knob */
     --shadow-rgb:0 0 0; --scrim:rgb(var(--shadow-rgb) / .6);
     --btn-hi:rgba(255,255,255,.38); --knob:#ffffff;
@@ -105,6 +108,7 @@
     --on-signal:#04230f;
     --signal-ink:#1a7a44; --amber-ink:#b5560a; --cyan-ink:#0a8a80;
     --ok-ink:#1c7a3e; --violet-ink:#6a3fe0; --magenta-ink:#b520c8; --red-ink:#cf1f15;
+    --medal-gold:#b9831a; --medal-silver:#828b9b; --medal-bronze:#a8623a;   /* deepened to read on cream */
     /* deep teal drives the frozen-day tint so it reads on paper */
     --cyan-rgb:10 138 128;
     --signal-glow:transparent; --signal-glow-strong:rgba(40,160,90,.25);
@@ -133,6 +137,7 @@
     --amber-glow:rgb(var(--amber-rgb) / .42);
     --glow-top:rgb(var(--signal-rgb) / .08); --glow-bot:rgb(var(--violet-rgb) / .05);
     --m1:#9c6f4e; --m2:#c69a52;
+    --medal-gold:#d8b066; --medal-silver:#b3afa0; --medal-bronze:#b9794e;   /* warm metals for the sumi field */
     --shadow-rgb:18 14 6;
     --btn-hi:rgba(255,250,235,.26); --knob:#f7f2e6;
     /* fonts — a sumi-brush mincho for display + a calm humanist sans for
@@ -163,6 +168,7 @@
     --amber-glow:rgb(var(--amber-rgb) / .3);
     --glow-top:rgb(var(--signal-rgb) / .12); --glow-bot:rgb(var(--violet-rgb) / .05);
     --m1:#bd8767; --m2:#d8b066;
+    --medal-gold:#a87d24; --medal-silver:#837e6f; --medal-bronze:#98602f;   /* earthen metals on washi */
   }
 
   /* ===== ZEN — shed the remaining "terminal" cues. The blinking caret
@@ -551,6 +557,20 @@
   /* results / stats tables */
   .res-score{font-family:var(--disp);font-size:34px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums;}
   .res-rate{font-size:13px;color:var(--muted);margin-bottom:6px;font-variant-numeric:tabular-nums;}
+  /* gauntlet results: the medal you earned, led with. Tier colour (a semantic
+     metal) tints the icon, the puck behind it, and the label; sub stays muted.
+     color-mix gives the soft puck; where unsupported the icon still reads. */
+  .res-medal-hero{display:flex;align-items:center;gap:13px;margin:10px 0 2px;color:var(--medal-bronze);}
+  .res-medal-hero[hidden]{display:none;}
+  .res-medal-hero .rm-ico{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;
+    width:54px;height:54px;border-radius:50%;
+    background:color-mix(in srgb,currentColor 15%,transparent);
+    box-shadow:inset 0 0 0 1.5px color-mix(in srgb,currentColor 40%,transparent);}
+  .res-medal-hero .rm-tier{font-family:var(--disp);font-size:25px;font-weight:800;line-height:1.05;letter-spacing:.01em;color:currentColor;}
+  .res-medal-hero .rm-sub{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .res-medal-hero.gold{color:var(--medal-gold);}
+  .res-medal-hero.silver{color:var(--medal-silver);}
+  .res-medal-hero.bronze{color:var(--medal-bronze);}
   .op-table{width:100%;border-collapse:collapse;margin:6px 0;font-size:14px;font-variant-numeric:tabular-nums;}
   .op-table th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;padding:6px 8px;text-transform:uppercase;letter-spacing:.06em;}
   .op-table td{padding:10px 8px;border-top:1px solid var(--line);}
@@ -688,12 +708,32 @@
     box-shadow:0 8px 24px -12px rgb(var(--signal-rgb) / .6);}
   .gc-cta:active{filter:brightness(1.06);}
   .gc-cta.ghost{background:var(--panel-2);color:var(--ink);border:1px solid var(--line-2);box-shadow:none;}
-  .gc-foot{margin-top:13px;display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);position:relative;}
-  .gc-done-stats{display:flex;align-items:center;gap:18px;margin:13px 0 2px;position:relative;}
-  .gc-stat .k,.gc-reward .k{font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;}
+  .gc-foot{margin-top:13px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--muted);position:relative;}
+  .gc-foot-l{display:inline-flex;align-items:center;gap:7px;min-width:0;}
+  .gc-done-stats{display:flex;align-items:center;gap:16px;margin:13px 0 2px;position:relative;}
+  .gc-stat .k,.gc-medal .k{font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;}
   .gc-stat .v{font-family:var(--disp);font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1;color:var(--ink);}
-  .gc-reward{margin-left:auto;text-align:right;background:var(--panel-2);border:1px solid var(--line);padding:8px 12px;border-radius:11px;}
-  .gc-reward .v{font-family:var(--disp);font-size:17px;font-weight:800;color:var(--signal-ink);}
+  .gc-stat .gc-sub{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:1px;}
+  /* today's medal — the cleared-state hero, tinted by tier (a semantic metal) */
+  .gc-medal{display:flex;align-items:center;gap:9px;color:var(--medal-bronze);}
+  .gc-medal.gold{color:var(--medal-gold);}
+  .gc-medal.silver{color:var(--medal-silver);}
+  .gc-medal.bronze{color:var(--medal-bronze);}
+  .gc-medal .gm-ico{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;flex:0 0 auto;
+    background:color-mix(in srgb,currentColor 16%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,currentColor 42%,transparent);}
+  .gc-medal .gm-txt .v{font-family:var(--disp);font-size:20px;font-weight:800;line-height:1.05;color:currentColor;}
+  /* pre-clear target line — concrete times to race for, gold accented */
+  .gc-par{margin:12px 0 2px;display:flex;align-items:center;flex-wrap:wrap;gap:5px 12px;font-size:13px;color:var(--ink-dim);position:relative;font-variant-numeric:tabular-nums;}
+  .gc-par b{font-weight:800;color:var(--ink);}
+  .gc-par-gold{display:inline-flex;align-items:center;gap:5px;color:var(--medal-gold);font-weight:600;}
+  .gc-par-gold b{color:var(--medal-gold);}
+  /* lifetime medal tally — the collection you grow (foot, right) */
+  .gc-medals{margin-left:auto;display:inline-flex;align-items:center;gap:11px;flex:0 0 auto;}
+  .gc-medals .gm{display:inline-flex;align-items:center;gap:4px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .gc-medals .gm.gold{color:var(--medal-gold);}
+  .gc-medals .gm.silver{color:var(--medal-silver);}
+  .gc-medals .gm.bronze{color:var(--medal-bronze);}
+  .gc-medals .gm .n{font-size:13px;color:var(--ink-dim);}
 
   /* ---------- staggered home entrance ---------- */
   @keyframes rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
@@ -926,6 +966,7 @@
   <button class="sheet-close" data-close aria-label="Close">&times;</button>
   <div class="sheet-inner">
     <h1 class="logo">Reckon</h1>
+    <div id="res-medal" class="res-medal-hero" hidden></div>
     <div class="res-score"><span id="res-score-label">Score: </span><span id="res-score">0</span></div>
     <div class="res-rate"><span id="res-rate-label">Rate: </span><span id="res-rate">0</span></div>
     <div id="res-extra" hidden></div>
@@ -1026,8 +1067,9 @@ const { dayKey, parseKey, addDays,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt, ghostMeter, timeRingState,
         masteryBaseline, masteryGrid, cellFreshness, masteryView, opStats, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
+        gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_XP,
         parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
-        DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD, GAUNTLET_WINDOW_DAYS } = Z;
+        DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_WINDOW_DAYS } = Z;
 
 /* ---------- IndexedDB storage ---------- */
 const DB_NAME='reckon', DB_VERSION=1;
@@ -1327,6 +1369,12 @@ function startGame(){
    the last fact, has no ghost, and logs problems (feeding weak facts) but not a
    session — so it stays out of the streak goal, stats chart, and bests. */
 const BOLT_SVG='<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>';
+/* medal (award) line-icon — same family as the other icons; the TIER colour is
+   applied by a .medal-<tier> class (gold/silver/bronze are semantic, like the
+   ring's green/amber/red). */
+function medalSVG(size){ size=size||20; return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>'; }
+const MEDAL_LABEL={gold:'Gold',silver:'Silver',bronze:'Bronze'};
+const fmtS=ms=>(ms/1000).toFixed(1)+'s';   // ms → "12.4s"
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 function seedFromKey(k){ return Number(String(k).replace(/-/g,'')); }
 let gauntletToday=null;   // { key, facts } — today's snapshot, set in renderHome
@@ -1343,6 +1391,7 @@ function beginGauntlet(snap){
     sessionId:uuid(), mode:'gauntlet',
     config:{presetName:'Gauntlet',durationSec:0,ops:{add:false,sub:false,mul:false,div:false},add:R(1,1,1,1),mul:R(1,1,1,1)},
     facts:shuffle(snap.facts.slice()), idx:0, gauntletDay:snap.key,   /* fresh order each run */
+    parMs:snap.parMs||0,                                             /* today's target time */
     problems:[], wrongAnswer:null, ended:false,
     startedAtISO:new Date().toISOString(), ghost:null,
   };
@@ -1484,9 +1533,12 @@ async function endGauntlet(){
   game.elapsedMs=performance.now()-game.startTime;
   const probs=game.problems;
   const ms=Math.round(game.elapsedMs);
-  /* mutate progress in memory first (clear time + flat reward) so the results
-     sheet is right even if the write below fails (quota / Private Browsing) */
-  const res=recordGauntletClear(progress,game.gauntletDay,ms);
+  const par=game.parMs||0;
+  const medal=medalForTime(ms,par);
+  /* mutate progress in memory first (best time + best medal + medal-upgrade XP)
+     so the results sheet is right even if the write below fails (quota / Private
+     Browsing) */
+  const res=recordGauntletClear(progress,game.gauntletDay,ms,medal);
   const streak=gauntletStreak(progress.gauntletClears,new Date());
   try{
     await Store.addProblems(probs);     // feeds the weak-fact loop + mastery (no session)
@@ -1498,7 +1550,8 @@ async function endGauntlet(){
   $('answer').blur();
   showScreen('home');
   await renderHome().catch(err=>console.error('endGauntlet: renderHome failed',err));
-  openGauntletResults(probs,{ms,streak,reward:res.reward,best:res.best,firstToday:res.firstToday,improved:res.improved});
+  openGauntletResults(probs,{ms,par,medal,streak,reward:res.reward,best:res.best,
+    firstToday:res.firstToday,improved:res.improved,medalImproved:res.medalImproved,prevMedal:res.prevMedal});
 }
 
 /* ===================================================================
@@ -1520,6 +1573,7 @@ function renderOpTable(el,rows){
 }
 
 function openResults(session,problems,extra){
+  $('res-medal').hidden=true;                 // medal hero is gauntlet-only
   $('res-score-label').textContent='Score: ';
   $('res-rate-label').textContent='Rate: ';
   $('res-score').textContent=session.score;
@@ -1560,14 +1614,27 @@ function probRowsHTML(problems){
     '</div>').join('')||'<div class="muted">No problems.</div>';
 }
 
-/* gauntlet completion — reuses the results sheet, but the headline is your TIME
-   plus the gauntlet streak and the (placeholder) reward */
+/* gauntlet completion — reuses the results sheet, but leads with the MEDAL you
+   earned (the run's grade against par), with your time + par underneath and the
+   streak / earned-XP / best-today as pills. The medal is the payoff for getting
+   faster; par makes "beat the clock" mean the same thing on every day's set. */
 function openGauntletResults(probs,info){
+  const ms=info.ms, par=info.par||0, medal=info.medal||'bronze';
+  const beat=par>0&&ms<=par;
+  const sub=par>0?(beat?'beat par by '+fmtS(par-ms):'cleared · par was '+fmtS(par)):'cleared';
+  const hero=$('res-medal');
+  hero.className='res-medal-hero '+medal;
+  hero.innerHTML='<span class="rm-ico">'+medalSVG(38)+'</span>'+
+    '<div class="rm-txt"><div class="rm-tier">'+MEDAL_LABEL[medal]+'</div>'+
+    '<div class="rm-sub">'+sub+'</div></div>';
+  hero.hidden=false;
+
   $('res-score-label').textContent='Time: ';
   $('res-rate-label').textContent='';
-  $('res-score').textContent=(info.ms/1000).toFixed(1)+'s';
-  $('res-rate').textContent='Gauntlet — your 10 weakest facts';
-  const best=info.best!=null?(info.best/1000).toFixed(1)+'s':'—';
+  $('res-score').textContent=fmtS(ms);
+  $('res-rate').textContent=(par>0?'Par '+fmtS(par)+' · ':'')+'your 10 weakest facts';
+
+  const best=info.best!=null?fmtS(info.best):'—';
   let xh='';
   if(info.reward) xh+='<span class="res-xp">+'+info.reward+' XP</span>';
   xh+='<span class="res-ghost win">'+FLAME_SVG_SM+'Gauntlet streak '+info.streak+'</span>';
@@ -1722,34 +1789,57 @@ function gauntletBlurb(facts){
   if(!top.length) return 'a fresh mix &middot; race the clock';
   return (top.length>1?top[0]+' &amp; '+top[1]+' are your slow spots':top[0]+' is your slow spot')+' &middot; race the clock';
 }
+/* lifetime medal collection — three metal counts; only shown once you own one.
+   Shows all three tiers (a 0 invites filling it in). */
+function medalTally(counts){
+  if(!counts||!counts.total) return '';
+  const cell=t=>'<span class="gm '+t+'" title="'+counts[t]+' '+t+'">'+medalSVG(15)+'<span class="n">'+counts[t]+'</span></span>';
+  return '<span class="gc-medals">'+cell('gold')+cell('silver')+cell('bronze')+'</span>';
+}
 function renderGauntlet(){
   const today=new Date(), tkey=dayKey(today);
   const clears=progress.gauntletClears||{};
   const best=clears[tkey]!=null?clears[tkey]:null;
   const streak=gauntletStreak(clears,today);
   const facts=(gauntletToday&&gauntletToday.facts)||[];
+  const par=(gauntletToday&&gauntletToday.parMs)||0;
+  const tgt=medalTargets(par);
+  const counts=medalCounts(progress.gauntletMedals);
+  const tally=medalTally(counts);
+  const todayMedal=(progress.gauntletMedals||{})[tkey]||null;
   const card=$('gaunt-card');
   const head='<div class="gc-head"><span class="gc-bolt">'+BOLT_SVG+'</span>'+
     '<span class="gc-kicker">TODAY&rsquo;S GAUNTLET</span>';
+  /* target line: the concrete times to race for (gold is the chase) */
+  const parLine=par>0?'<div class="gc-par">Par <b>'+fmtS(par)+'</b>'+
+    '<span class="gc-par-gold">'+medalSVG(14)+'gold under <b>'+fmtS(tgt.gold)+'</b></span></div>':'';
   if(best==null){
-    const chips=facts.slice(0,3).map(f=>'<span class="gc-chip">'+f.display+'</span>').join('');
-    const more=facts.length>3?'<span class="gc-chip">+'+(facts.length-3)+' more</span>':'';
+    const chips=facts.slice(0,2).map(f=>'<span class="gc-chip">'+f.display+'</span>').join('');
+    const more=facts.length>2?'<span class="gc-chip">+'+(facts.length-2)+' more</span>':'';
     card.innerHTML=head+'<span class="gc-tag">NEW</span></div>'+
       '<div class="gc-title">Your '+GAUNTLET_SIZE+' weakest facts</div>'+
       '<div class="gc-blurb">'+gauntletBlurb(facts)+'</div>'+
       '<div class="gc-chips">'+chips+more+'</div>'+
+      parLine+
       '<button class="gc-cta" id="btn-gauntlet">'+BOLT_SVG+' Start &middot; '+GAUNTLET_SIZE+' problems</button>'+
-      '<div class="gc-foot">'+(streak?FLAME_SVG_SM+streak+'-day gauntlet streak':'Clear it to start a gauntlet streak')+'</div>';
+      '<div class="gc-foot"><span class="gc-foot-l">'+
+        (streak?FLAME_SVG_SM+streak+'-day gauntlet streak':(counts.total?'Beat par to win a medal':'Win your first medal — beat par'))+
+        '</span>'+tally+'</div>';
   }else{
+    const tier=todayMedal||'bronze';
+    /* the next rung to chase: gold if not there yet, else just a faster time */
+    const cta=tier!=='gold'?'Chase gold &middot; under '+fmtS(tgt.gold):'Try for a faster time';
     card.innerHTML=head+'<span class="gc-tag done">&check; CLEARED</span></div>'+
       '<div class="gc-title">Your '+GAUNTLET_SIZE+' weakest facts</div>'+
       '<div class="gc-done-stats">'+
-        '<div class="gc-stat"><div class="k">BEST TODAY</div><div class="v">'+(best/1000).toFixed(1)+'s</div></div>'+
+        '<div class="gc-medal '+tier+'"><span class="gm-ico">'+medalSVG(26)+'</span>'+
+          '<div class="gm-txt"><div class="k">TODAY</div><div class="v">'+MEDAL_LABEL[tier]+'</div></div></div>'+
+        '<div class="gc-stat"><div class="k">BEST TIME</div><div class="v">'+fmtS(best)+'</div>'+
+          (par>0?'<div class="gc-sub">par '+fmtS(par)+'</div>':'')+'</div>'+
         '<div class="gc-stat"><div class="k">STREAK</div><div class="v">'+(streak||1)+'</div></div>'+
-        '<div class="gc-reward"><div class="k">EARNED</div><div class="v">+'+GAUNTLET_REWARD+'</div></div>'+
       '</div>'+
-      '<button class="gc-cta ghost" id="btn-gauntlet">Try for a faster time</button>'+
-      '<div class="gc-foot">New set tomorrow &middot; built from your latest results</div>';
+      '<button class="gc-cta ghost" id="btn-gauntlet">'+cta+'</button>'+
+      '<div class="gc-foot"><span class="gc-foot-l">New set tomorrow &middot; from your latest results</span>'+tally+'</div>';
   }
 }
 
@@ -1771,7 +1861,12 @@ async function renderHome(){
        index instead of loading every problem ever on each cold launch */
     const since=Date.now()-GAUNTLET_WINDOW_DAYS*86400000;
     const problems=await Store.getProblemsSince(since);
-    gauntletToday={key:gkey,facts:buildGauntlet(problems,Date.now(),mulberry32(seedFromKey(gkey)))};
+    const facts=buildGauntlet(problems,Date.now(),mulberry32(seedFromKey(gkey)));
+    /* par: how long THIS set takes you, so the medal you race for means the same
+       thing every day even though the set changes (gauntletPar over the same
+       recent window the set was built from) */
+    const parMs=gauntletPar(facts,problems).parMs;
+    gauntletToday={key:gkey,facts,parMs};
   }
   renderGauntlet();
   renderBackupNudge(sessions);

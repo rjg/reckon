@@ -164,7 +164,7 @@
 
   /* ---- progress / XP ---- */
   function defaultProgress() {
-    return { xp: 0, xpLifetime: 0, freezes: 0, freezeDays: {}, gauntletClears: {}, v: 1 };
+    return { xp: 0, xpLifetime: 0, freezes: 0, freezeDays: {}, gauntletClears: {}, gauntletMedals: {}, v: 1 };
   }
   /* normalize a loaded record so older/partial shapes don't crash callers */
   function normalizeProgress(p) {
@@ -176,6 +176,7 @@
       freezes: Math.max(0, Math.min(MAX_FREEZES, p.freezes | 0)),
       freezeDays: (p.freezeDays && typeof p.freezeDays === 'object') ? p.freezeDays : {},
       gauntletClears: (p.gauntletClears && typeof p.gauntletClears === 'object') ? p.gauntletClears : {},
+      gauntletMedals: (p.gauntletMedals && typeof p.gauntletMedals === 'object') ? p.gauntletMedals : {},
       v: 1,
     };
   }
@@ -447,17 +448,110 @@
     while (clears[dayKey(d)] != null) { n++; d = addDays(d, -1); }
     return n;
   }
-  /* record a clear time (ms) for a day; award the flat reward only on the FIRST
-     clear of that day. Mutates progress (gauntletClears, and xp via awardXp). */
-  function recordGauntletClear(progress, key, ms) {
+  /* ---- par & medals ----
+     The daily set changes (it's always your *current* weakest facts), so raw
+     clear-times don't compare day to day — 18s on an easy set beats 22s on a
+     brutal one, yet the bare number hides that, which is why "get faster" has
+     felt pointless. Par fixes it: a per-day target built from how long these
+     specific facts actually take YOU, so "beat the clock" means the same thing
+     every day regardless of which facts are in the set. A run is then graded
+     against par into a medal — gold (crush it) · silver (beat it) · bronze
+     (clear it) — giving speed a concrete, collectable payoff. All pure. */
+  const MEDAL_RANK = { none: 0, bronze: 1, silver: 2, gold: 3 };
+  const MEDAL_TIERS = ['bronze', 'silver', 'gold'];      // ascending
+  const MEDAL_XP = { bronze: 30, silver: 50, gold: 75 };  // XP credited for *reaching* a tier
+  // medal cutoffs as a fraction of par: beat par → silver, par −20% → gold.
+  const PAR_GOLD = 0.80, PAR_SILVER = 1.00;
+  const PAR_DEFAULT_BASELINE = 2500;  // ms — yardstick when no correct times exist yet (cold start)
+  const PAR_WEAK_MULT = 1.5;          // a fact with no recent samples is assumed this × baseline
+  const PAR_FACT_FLOOR = 700, PAR_FACT_CAP = 9000;        // clamp each fact's expectation (ms)
+
+  /* Expected time to clear `facts`, summed from your own recent pace on each:
+     the median of your correct solve-times for that exact fact (needs ≥2
+     samples), else a weak-fact default (these are your slow spots, so > median).
+     Pure — pass the SAME recent-window `problems` the gauntlet was built from.
+     Returns { parMs, baseline, perFact:[{key, expMs, from}] }. */
+  function gauntletPar(facts, problems, opts) {
+    opts = opts || {};
+    const weakMult = opts.weakMult != null ? opts.weakMult : PAR_WEAK_MULT;
+    let baseline = masteryBaseline(problems || []);
+    if (!(baseline > 0)) baseline = PAR_DEFAULT_BASELINE;
+    const times = {};                                    // factKey -> [correct msToAnswer]
+    for (const p of (problems || [])) {
+      if (!p.wasCorrect) continue;
+      const k = factKey(p);
+      (times[k] = times[k] || []).push(p.msToAnswer);
+    }
+    const clamp = ms => Math.max(PAR_FACT_FLOOR, Math.min(PAR_FACT_CAP, ms));
+    const perFact = (facts || []).map(f => {
+      const k = factKey(f), ts = times[k];
+      let expMs, from;
+      if (ts && ts.length >= 2) {
+        ts.sort((a, b) => a - b);
+        expMs = ts[Math.floor(ts.length / 2)]; from = 'history';
+      } else { expMs = baseline * weakMult; from = 'default'; }
+      return { key: k, expMs: clamp(expMs), from };
+    });
+    const parMs = Math.round(perFact.reduce((a, x) => a + x.expMs, 0));
+    return { parMs, baseline, perFact };
+  }
+
+  /* Grade a clear time against par. No usable par (≤0) → bronze: a clear is a clear. */
+  function medalForTime(ms, parMs) {
+    if (!(parMs > 0)) return 'bronze';
+    if (ms <= PAR_GOLD * parMs) return 'gold';
+    if (ms <= PAR_SILVER * parMs) return 'silver';
+    return 'bronze';
+  }
+  /* The concrete time you must beat for each medal — so the card can show real
+     target seconds ("gold under 18.2s"), kept in lockstep with medalForTime. */
+  function medalTargets(parMs) {
+    parMs = Math.max(0, parMs || 0);
+    return { silver: Math.round(PAR_SILVER * parMs), gold: Math.round(PAR_GOLD * parMs) };
+  }
+
+  /* Lifetime tally from the per-day best-medal map (the collection you grow). */
+  function medalCounts(gauntletMedals) {
+    const out = { gold: 0, silver: 0, bronze: 0, total: 0 };
+    if (!gauntletMedals) return out;
+    for (const k in gauntletMedals) {
+      const m = gauntletMedals[k];
+      if (out[m] != null) { out[m]++; out.total++; }
+    }
+    return out;
+  }
+
+  /* record a clear time (ms) for a day. Tracks the day's best time AND best
+     medal, and pays XP for *upgrading* the day's medal (first clear pays the
+     full tier value; a later run that earns a better medal pays only the
+     difference — so chasing gold mid-day still rewards, but re-clearing doesn't
+     farm XP). Called WITHOUT a medal (3-arg, e.g. tests) it falls back to the
+     old flat first-clear reward. Mutates progress (gauntletClears, gauntletMedals,
+     xp via awardXp). */
+  function recordGauntletClear(progress, key, ms, medal) {
     progress.gauntletClears = progress.gauntletClears || {};
+    progress.gauntletMedals = progress.gauntletMedals || {};
     ms = Math.max(0, Math.round(ms));
     const prev = progress.gauntletClears[key];
     const firstToday = prev == null;
     const improved = firstToday || ms < prev;
     if (improved) progress.gauntletClears[key] = ms;
-    const reward = firstToday ? awardXp(progress, GAUNTLET_REWARD) : 0;
-    return { firstToday, improved, best: progress.gauntletClears[key], reward };
+
+    const prevMedal = progress.gauntletMedals[key] || null;
+    let medalImproved = false, reward;
+    if (medal) {
+      medalImproved = (MEDAL_RANK[medal] || 0) > (MEDAL_RANK[prevMedal] || 0);
+      if (medalImproved) progress.gauntletMedals[key] = medal;
+      const gained = medalImproved
+        ? (MEDAL_XP[medal] || 0) - (prevMedal ? (MEDAL_XP[prevMedal] || 0) : 0) : 0;
+      reward = gained > 0 ? awardXp(progress, gained) : 0;
+    } else {
+      reward = firstToday ? awardXp(progress, GAUNTLET_REWARD) : 0;   // legacy flat reward
+    }
+    return {
+      firstToday, improved, best: progress.gauntletClears[key], reward,
+      medal: progress.gauntletMedals[key] || null, prevMedal, medalImproved,
+    };
   }
 
   /* ---- CSV import (the inverse of index.html's downloadCSV) ----
@@ -617,9 +711,14 @@
       const v = inc.gauntletClears[k];
       if (gauntletClears[k] == null || v < gauntletClears[k]) gauntletClears[k] = v;
     }
+    const gauntletMedals = Object.assign({}, cur.gauntletMedals);
+    for (const k in inc.gauntletMedals) {                 // keep the higher-ranked medal per day
+      const v = inc.gauntletMedals[k];
+      if ((MEDAL_RANK[v] || 0) > (MEDAL_RANK[gauntletMedals[k]] || 0)) gauntletMedals[k] = v;
+    }
     return {
       xp: Math.max(cur.xp, inc.xp), xpLifetime: Math.max(cur.xpLifetime, inc.xpLifetime),
-      freezes: Math.max(cur.freezes, inc.freezes), freezeDays, gauntletClears, v: 1,
+      freezes: Math.max(cur.freezes, inc.freezes), freezeDays, gauntletClears, gauntletMedals, v: 1,
     };
   }
 
@@ -659,6 +758,7 @@
     cellFreshness, masteryView, MASTERY_FRESH_DAYS, MASTERY_STALE_DAYS,
     opStats, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
+    gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_RANK, MEDAL_TIERS, MEDAL_XP,
     parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
   };
 });
