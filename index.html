@@ -210,6 +210,11 @@
   /* ---------- screens ---------- */
   .screen{display:none;height:100%;flex-direction:column;position:relative;z-index:1;}
   .screen.active{display:flex;}
+  /* home can grow taller than the viewport (long streak + gauntlet cards on
+     short screens) — let it scroll its own overflow instead of clipping. */
+  #screen-home{overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;}
+  #screen-home>*{flex-shrink:0;}
+  #screen-home::after{content:"";display:block;height:calc(env(safe-area-inset-bottom) + 8px);flex-shrink:0;}
   #screen-game{background:var(--bg);}
   #screen-game.active{position:fixed;top:0;left:0;right:0;bottom:0;min-height:0;height:auto;}
 
