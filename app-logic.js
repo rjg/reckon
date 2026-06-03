@@ -273,9 +273,14 @@
       if (a > b) { const t = a; a = b; b = t; }
       if (a < 1 || b < 1 || a > maxN || b > maxN) continue;
       let c = cells[a - 1][b - 1];
-      if (!c) c = cells[a - 1][b - 1] = { count: 0, correct: 0, totalMs: 0 };
+      if (!c) c = cells[a - 1][b - 1] = { count: 0, correct: 0, totalMs: 0, minMs: Infinity, lastTs: 0 };
       c.count++;
-      if (p.wasCorrect) { c.correct++; c.totalMs += p.msToAnswer; }
+      const ts = p.timestamp || 0;          // recency = most recent attempt (drives decay)
+      if (ts > c.lastTs) c.lastTs = ts;
+      if (p.wasCorrect) {
+        c.correct++; c.totalMs += p.msToAnswer;
+        if (p.msToAnswer < c.minMs) c.minMs = p.msToAnswer;  // personal best on this fact
+      }
     }
     for (let i = 0; i < maxN; i++) for (let j = 0; j < maxN; j++) {
       const c = cells[i][j];
@@ -285,6 +290,43 @@
       c.level = cellLevel(c, baseline);
     }
     return { op, maxN, baseline, cells };
+  }
+
+  /* ---- mastery decay (the "garden you tend") ----
+     cellLevel grades a fact green once and forever; decay adds recency on top so
+     a mastered fact left untouched fades green → amber and asks to be practiced
+     again. Pure: the caller passes `now` (ms) — no hidden clock — so it stays
+     unit-testable. Freshness is a 1 → 0 ramp: full inside a grace window, linear
+     down to 0 at the stale horizon (aligned with the gauntlet's 21-day recent
+     window, so a fact that drops out of the gauntlet is also fully wilted here). */
+  const MASTERY_FRESH_DAYS = 7;    // a fact stays fully green this long after practice
+  const MASTERY_STALE_DAYS = 21;   // ...then fades, fully wilted (needs tending) by here
+  function cellFreshness(lastTs, nowMs, freshDays, staleDays) {
+    freshDays = freshDays != null ? freshDays : MASTERY_FRESH_DAYS;
+    staleDays = staleDays != null ? staleDays : MASTERY_STALE_DAYS;
+    if (!lastTs) return { stage: 'none', frac: 0, days: Infinity };   // never practiced (or pre-timestamp data)
+    const days = Math.max(0, (nowMs - lastTs) / 86400000);
+    if (days <= freshDays) return { stage: 'fresh', frac: 1, days };
+    if (days >= staleDays) return { stage: 'stale', frac: 0, days };
+    return { stage: 'aging', frac: 1 - (days - freshDays) / (staleDays - freshDays), days };
+  }
+  /* Fold a cell's quality (level) and its freshness into what the grid shows.
+     ONLY strong (3) cells decay — weak/ok/unseen are already "go practice me", so
+     fading them adds nothing. A strong cell's `decay` ramps 0 → 1 as it ages (the
+     render blends green → amber by it); once fully stale it drops to displayLevel
+     2 and is flagged `tending`, so it leaves the "strong" count and gets a marker.
+     A strong cell with no timestamp (old imported data) can't be aged, so it
+     stays green. */
+  function masteryView(cell, nowMs, opts) {
+    opts = opts || {};
+    const level = cell ? cell.level : 0;
+    const f = cellFreshness(cell ? cell.lastTs : 0, nowMs, opts.freshDays, opts.staleDays);
+    let displayLevel = level, decay = 0, tending = false;
+    if (level === 3 && (f.stage === 'aging' || f.stage === 'stale')) {
+      decay = 1 - f.frac;                          // 0 (just past grace) → 1 (fully wilted)
+      if (f.stage === 'stale') { displayLevel = 2; tending = true; }
+    }
+    return { level, displayLevel, decay, tending, stage: f.stage, days: f.days };
   }
 
   /* ---- per-operation aggregate (results & stats tables) ----
@@ -614,6 +656,7 @@
     defaultProgress, normalizeProgress, xpForSession, awardXp, canBuyFreeze, buyFreeze,
     pickGhost, ghostScoreAt, ghostMeter, timeRingState, GHOST_METER_RANGE,
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
+    cellFreshness, masteryView, MASTERY_FRESH_DAYS, MASTERY_STALE_DAYS,
     opStats, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
     parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,

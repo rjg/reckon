@@ -609,18 +609,51 @@
   /* mastery grids */
   .m-grid{border-collapse:collapse;margin:4px 0 14px;width:100%;table-layout:fixed;}
   .m-grid th{font-size:9px;color:var(--muted);font-weight:600;text-align:center;padding:0;height:13px;}
-  .m-grid td{border:1.5px solid var(--panel);border-radius:3px;height:0;padding-top:7%;background:var(--panel-2);}
-  .m-grid td.m0{background:var(--panel-2);}
+  .m-grid td{border:1.5px solid var(--panel);border-radius:3px;height:0;padding-top:7%;background:var(--panel-2);
+    position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  .m-grid td.m0{background:var(--panel-2);cursor:default;}
   .m-grid td.m1{background:var(--m1);}
   .m-grid td.m2{background:var(--m2);}
   .m-grid td.m3{background:var(--signal-dim);}
-  .mastery-legend{display:flex;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:2px;}
-  .mastery-legend .lg{display:inline-block;width:13px;height:13px;border-radius:3px;margin:0 5px 0 12px;}
+  /* decay: a strong fact untended fades green→amber, blended by its --decay
+     (0→1). color-mix is progressive enhancement — without it the m2/m3 base
+     class still paints a sensible solid colour. */
+  .m-grid td.decaying{background:color-mix(in srgb, var(--signal-dim), var(--m2) calc(var(--decay,0) * 100%));}
+  /* needs-tending marker: a small dot so a wilted-strong cell is scannable and
+     tells itself apart from a merely-OK one (both are amber) */
+  .m-grid td.tend::after,.mastery-legend .lg.tend::after{
+    content:'';position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;
+    border-radius:50%;background:var(--ink);opacity:.5;}
+  .m-grid td.sel{box-shadow:inset 0 0 0 2px var(--ink);z-index:1;}
+  .mastery-legend{display:flex;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap;margin-top:2px;row-gap:4px;}
+  .mastery-legend .lg{display:inline-block;width:13px;height:13px;border-radius:3px;margin:0 5px 0 12px;position:relative;}
   .mastery-legend .lg:first-child{margin-left:0;}
   .mastery-legend .lg.m0{background:var(--panel-2);}
   .mastery-legend .lg.m1{background:var(--m1);}
   .mastery-legend .lg.m2{background:var(--m2);}
   .mastery-legend .lg.m3{background:var(--signal-dim);}
+  /* cell-detail popover */
+  #cell-pop{position:fixed;z-index:60;left:0;top:0;width:max-content;max-width:250px;
+    background:var(--raise);border:1px solid var(--line-2);border-radius:14px;padding:12px 13px 13px;
+    box-shadow:0 12px 34px rgb(var(--shadow-rgb) / .5);
+    opacity:0;pointer-events:none;transform:translateY(4px);transition:opacity .12s,transform .12s;}
+  #cell-pop.open{opacity:1;pointer-events:auto;transform:none;}
+  #cell-pop .cp-close{position:absolute;top:7px;right:8px;width:26px;height:26px;border-radius:50%;
+    background:var(--panel-2);color:var(--muted);font-size:16px;font-weight:700;line-height:1;}
+  #cell-pop .cp-fact{font-family:var(--disp);font-size:20px;font-weight:800;letter-spacing:-.3px;
+    padding-right:24px;font-variant-numeric:tabular-nums;}
+  #cell-pop .cp-fact2{font-size:13px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums;}
+  #cell-pop .cp-status{display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+    margin-top:9px;padding:3px 9px;border-radius:999px;background:var(--panel-2);color:var(--muted);}
+  #cell-pop .cp-status.lvl1{color:var(--red-ink);}
+  #cell-pop .cp-status.lvl3{color:var(--signal-ink);background:rgb(var(--signal-rgb) / .13);}
+  #cell-pop .cp-status.lvl2,#cell-pop .cp-status.tend{color:var(--amber-ink);background:rgb(var(--amber-rgb) / .14);}
+  #cell-pop .cp-when{font-size:11.5px;color:var(--muted);margin-top:9px;}
+  #cell-pop .cp-empty{font-size:13px;color:var(--ink-dim);margin-top:10px;}
+  #cell-pop .cp-stats{margin-top:10px;gap:7px;}
+  #cell-pop .cp-stats .stat-card{padding:8px 10px;border-radius:10px;}
+  #cell-pop .cp-stats .stat-card .v{font-size:18px;margin-top:1px;}
+  #cell-pop .cp-stats .stat-card .s{font-size:10px;margin-top:2px;}
 
   /* ---------- daily gauntlet card ---------- */
   .gaunt-card{
@@ -954,6 +987,9 @@
 
 <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
+<!-- mastery cell-detail popover (anchored to the tapped grid cell; see showCellPop) -->
+<div id="cell-pop" role="dialog" aria-label="Fact details"></div>
+
 <script src="app-logic.js"></script>
 <script>
 "use strict";
@@ -988,7 +1024,7 @@ const { dayKey, parseKey, addDays,
         dayCounts, currentStreak, bestStreak, reconcileFreezes,
         defaultProgress, normalizeProgress, xpForSession, awardXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt, ghostMeter, timeRingState,
-        masteryBaseline, masteryGrid, opStats, computeWeakFacts, genProblem, OP_ORDER,
+        masteryBaseline, masteryGrid, cellFreshness, masteryView, opStats, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
         parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
         DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_REWARD, GAUNTLET_WINDOW_DAYS } = Z;
@@ -1187,6 +1223,7 @@ function openSheet(id){
   sheet.focus();   // role=dialog + tabindex=-1: screen readers announce the sheet
 }
 function closeSheets(){
+  hideCellPop();   // the mastery popover lives outside the sheets — close it with them
   const open=Array.prototype.slice.call(document.querySelectorAll('.sheet.open'));
   const active=document.activeElement;
   open.forEach(s=>{ s.classList.remove('open'); if(active && s.contains(active)){ try{ active.blur(); }catch(e){} } });
@@ -2137,8 +2174,13 @@ async function renderBests(){
 /* ---------- mastery grids ---------- */
 const MASTERY_OPS=[[TIMES,'Multiplication'],[DIV,'Division'],[PLUS,'Addition'],[MINUS,'Subtraction']];
 const LEVEL_CLASS=['m0','m1','m2','m3'];
-function renderGrid(g){
-  const n=g.maxN;
+const LEVEL_WORD=['Not practiced yet','Weak','OK','Strong'];
+/* the most recent render's grids, keyed by op symbol, so a cell tap can pull the
+   cell's stats back out without recomputing (see the detail popover below) */
+let masteryGrids=null;
+function levelWord(v){ return v.tending?'Strong · needs tending':LEVEL_WORD[v.displayLevel]; }
+function renderGrid(g,now){
+  const n=g.maxN, op=g.op;
   let h='<table class="m-grid"><tr><th></th>';
   for(let j=1;j<=n;j++) h+='<th>'+j+'</th>';
   h+='</tr>';
@@ -2146,55 +2188,144 @@ function renderGrid(g){
     h+='<tr><th>'+i+'</th>';
     for(let j=1;j<=n;j++){
       const a=Math.min(i,j), b=Math.max(i,j), c=g.cells[a-1][b-1];
-      const lvl=c?c.level:0;
+      const v=masteryView(c,now);
+      let cls=LEVEL_CLASS[v.displayLevel], style='';
+      if(v.decay>0){ cls+=' decaying'; style=' style="--decay:'+v.decay.toFixed(2)+'"'; }   // CSS blends green→amber by this
+      if(v.tending) cls+=' tend';
       const title=c?(Math.round(c.accuracy*100)+'% · '+
-        (c.avgMs===Infinity?'—':fmtSec(c.avgMs))+' · n='+c.count):'unseen';
-      h+='<td class="'+LEVEL_CLASS[lvl]+'" title="'+title+'"></td>';
+        (c.avgMs===Infinity?'—':fmtSec(c.avgMs))+' · n='+c.count+(v.tending?' · needs tending':'')):'unseen';
+      h+='<td class="'+cls+'" data-op="'+op+'" data-a="'+a+'" data-b="'+b+'"'+style+
+         ' aria-label="'+escAttr(factForms(op,a,b)[0]+', '+levelWord(v))+'" title="'+escAttr(title)+'"></td>';
     }
     h+='</tr>';
   }
   return h+'</table>';
 }
-/* tally seen / strong / weak cells in one mastery grid */
-function masteryTally(g){
-  let seen=0,strong=0,weak=0;
+/* tally seen / strong / weak / needs-tending cells in one grid, using the
+   DISPLAY level so a wilted-strong fact leaves the "strong" count (return pressure) */
+function masteryTally(g,now){
+  let seen=0,strong=0,weak=0,tending=0;
   for(const row of g.cells) for(const c of row){
     if(!c) continue; seen++;
-    if(c.level===3) strong++; else if(c.level===1) weak++;
+    const v=masteryView(c,now);
+    if(v.displayLevel===3) strong++; else if(v.displayLevel===1) weak++;
+    if(v.tending) tending++;
   }
-  return {seen,strong,weak};
+  return {seen,strong,weak,tending};
 }
 async function renderMastery(){
+  hideCellPop();
   const problems=await Store.getProblems();
   $('mastery-legend').innerHTML=
     '<span class="lg m0"></span>Unseen<span class="lg m1"></span>Weak'+
-    '<span class="lg m2"></span>OK<span class="lg m3"></span>Strong';
+    '<span class="lg m2"></span>OK<span class="lg m3"></span>Strong'+
+    '<span class="lg m2 tend"></span>Needs tending';
   const summary=$('mastery-summary'), body=$('mastery-body');
   if(!problems.length){
+    masteryGrids=null;
     summary.innerHTML='';
     body.innerHTML='<p class="muted">No games yet — play to build your mastery map.</p>';
     return;
   }
+  const now=Date.now();
   const baseline=masteryBaseline(problems);
+  masteryGrids={};
   const grids=MASTERY_OPS.map(([op,name])=>{
     const g=masteryGrid(problems,op,12,baseline);
-    return {op,name,g,t:masteryTally(g)};
+    masteryGrids[op]=g;
+    return {op,name,g,t:masteryTally(g,now)};
   });
-  const tot={seen:0,strong:0,weak:0};
-  for(const x of grids){ tot.seen+=x.t.seen; tot.strong+=x.t.strong; tot.weak+=x.t.weak; }
+  const tot={seen:0,strong:0,weak:0,tending:0};
+  for(const x of grids){ tot.seen+=x.t.seen; tot.strong+=x.t.strong; tot.weak+=x.t.weak; tot.tending+=x.t.tending; }
   const pct=tot.seen?Math.round(tot.strong/tot.seen*100):0;
+  const sub2=[tot.weak+' weak',tot.tending?tot.tending+' need tending':''].filter(Boolean).join(' · ');
   summary.innerHTML='<div class="stat-cards">'+
     '<div class="stat-card accent"><div class="k">Strong</div><div class="v">'+pct+'%</div>'+
       '<div class="s">of facts practiced</div></div>'+
     '<div class="stat-card"><div class="k">Facts seen</div><div class="v">'+tot.seen+'</div>'+
-      '<div class="s">'+tot.weak+' still weak</div></div>'+
+      '<div class="s">'+sub2+'</div></div>'+
   '</div>';
   let h='';
-  for(const x of grids)
+  for(const x of grids){
+    const meta=x.t.seen?(x.t.strong+' / '+x.t.seen+' strong'+(x.t.tending?' · '+x.t.tending+' fading':'')):'unseen';
     h+='<div class="m-op"><span class="m-op-name"><span class="sym">'+x.op+'</span>'+x.name+'</span>'+
-       '<span class="m-op-meta">'+(x.t.seen?x.t.strong+' / '+x.t.seen+' strong':'unseen')+'</span></div>'+
-       renderGrid(x.g);
+       '<span class="m-op-meta">'+meta+'</span></div>'+
+       renderGrid(x.g,now);
+  }
   body.innerHTML=h;
+}
+
+/* ---------- mastery cell detail popover ----------
+   Tap any cell to see the fact it stands for and your record on it. A light,
+   non-modal popover anchored to the tapped cell (the grid stays a fluid thing to
+   poke around), dismissed by tapping elsewhere, scrolling, Escape, or its ×. */
+const OP_FORM={[TIMES]:(a,b)=>[a+' × '+b+' = '+(a*b)],
+              [PLUS]:(a,b)=>[a+' + '+b+' = '+(a+b)],
+              [DIV]:(a,b)=>{const p=a*b;return a===b?[p+' ÷ '+a+' = '+b]:[p+' ÷ '+a+' = '+b,p+' ÷ '+b+' = '+a];},
+              [MINUS]:(a,b)=>{const s=a+b;return a===b?[s+' − '+a+' = '+b]:[s+' − '+a+' = '+b,s+' − '+b+' = '+a];}};
+/* the one or two written problems a folded cell represents */
+function factForms(op,a,b){ const f=OP_FORM[op]; return f?f(a,b):[a+' '+op+' '+b]; }
+function escAttr(s){ return escapeHTML(s); }
+function daysAgoLabel(days){
+  if(!isFinite(days)) return '';
+  if(days<1) return 'today';
+  if(days<2) return 'yesterday';
+  return Math.round(days)+' days ago';
+}
+let selectedCell=null;
+function cellPopHTML(op,a,b){
+  const g=masteryGrids&&masteryGrids[op];
+  const c=g?g.cells[a-1][b-1]:null;
+  const now=Date.now();
+  const v=masteryView(c,now);
+  const forms=factForms(op,a,b);
+  let h='<button class="cp-close" data-cp-close aria-label="Close">&times;</button>'+
+    '<div class="cp-fact">'+escapeHTML(forms[0])+'</div>'+
+    (forms[1]?'<div class="cp-fact2">'+escapeHTML(forms[1])+'</div>':'');
+  if(!c){
+    h+='<div class="cp-empty">Not practiced yet — it’ll fill in as it comes up in games.</div>';
+    return h;
+  }
+  h+='<div class="cp-status lvl'+v.displayLevel+(v.tending?' tend':'')+'">'+levelWord(v)+'</div>';
+  const when=daysAgoLabel(v.days);
+  h+=when?'<div class="cp-when">Last practiced '+when+'</div>':'';
+  const acc=Math.round(c.accuracy*100), errors=c.count-c.correct;
+  const card=(k,val,s)=>'<div class="stat-card"><div class="k">'+k+'</div><div class="v">'+val+'</div>'+
+    (s?'<div class="s">'+s+'</div>':'')+'</div>';
+  h+='<div class="stat-cards cp-stats">'+
+    card('Attempts',c.count,errors?errors+(errors===1?' miss':' misses'):'no misses')+
+    card('Accuracy',acc+'%',acc>=90?'':c.correct+'/'+c.count+' right')+
+    card('Avg time',c.avgMs===Infinity?'—':fmtSec(c.avgMs),'')+
+    card('Best',c.minMs===Infinity?'—':fmtSec(c.minMs),'')+
+  '</div>';
+  return h;
+}
+function positionCellPop(td){
+  const pop=$('cell-pop');
+  const r=td.getBoundingClientRect(), pr=pop.getBoundingClientRect(), m=8;
+  let left=r.left+r.width/2-pr.width/2;
+  left=Math.max(m,Math.min(left,window.innerWidth-pr.width-m));
+  let top=r.bottom+8;                                   // default: below the cell
+  if(top+pr.height>window.innerHeight-m) top=r.top-pr.height-8;  // ...flip above if it would overflow
+  top=Math.max(m,top);
+  pop.style.left=left+'px'; pop.style.top=top+'px';
+}
+function showCellPop(td){
+  const pop=$('cell-pop');
+  pop.innerHTML=cellPopHTML(td.dataset.op,+td.dataset.a,+td.dataset.b);
+  pop.setAttribute('aria-label',td.getAttribute('aria-label')||'Fact details');
+  pop.classList.add('open');                            // display it (opacity 0) so we can measure, then place
+  positionCellPop(td);
+  if(selectedCell) selectedCell.classList.remove('sel');
+  td.classList.add('sel'); selectedCell=td;
+}
+function hideCellPop(){
+  const pop=$('cell-pop'); if(pop) pop.classList.remove('open');
+  if(selectedCell){ selectedCell.classList.remove('sel'); selectedCell=null; }
+}
+function toggleCellPop(td){
+  if(selectedCell===td){ hideCellPop(); return; }       // tap the same cell again to dismiss
+  showCellPop(td);
 }
 
 function csvCell(v){
@@ -2418,6 +2549,14 @@ $('stats-tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-st
 $('settings-tabs').addEventListener('click',e=>{ const b=e.target.closest('[data-ctab]'); if(b) showSettingsTab(b.dataset.ctab); });
 $('btn-stats').addEventListener('click',()=>{ openSheet('sheet-stats'); showStatsTab('overview'); });
 $('btn-mastery').addEventListener('click',()=>{ openSheet('sheet-mastery'); renderMastery().catch(err=>console.error('renderMastery failed',err)); });
+/* mastery cell detail: tap a cell to open/move the popover; tapping elsewhere in
+   the sheet, scrolling, or closing dismisses it (positions are viewport-fixed, so
+   a scroll would strand the popover — just hide it). */
+$('mastery-body').addEventListener('click',e=>{ const td=e.target.closest('td[data-op]'); if(td) toggleCellPop(td); });
+$('sheet-mastery').addEventListener('click',e=>{ if(!e.target.closest('td[data-op]')) hideCellPop(); });
+$('sheet-mastery').querySelector('.sheet-inner').addEventListener('scroll',hideCellPop,{passive:true});
+$('cell-pop').addEventListener('click',e=>{ if(e.target.closest('[data-cp-close]')) hideCellPop(); });
+window.addEventListener('resize',hideCellPop);
 $('btn-settings').addEventListener('click',()=>{ syncSettings(); openSheet('sheet-settings'); showSettingsTab('game'); });
 /* the buy-freeze button is re-created on every renderStreak — delegate */
 $('streak-card').addEventListener('click',e=>{ if(e.target.closest('#btn-buy-freeze')) onBuyFreeze(); });
@@ -2478,7 +2617,7 @@ $('res-toggle').addEventListener('click',()=>{
 $('backdrop').addEventListener('click',closeSheets);
 document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',closeSheets));
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){ closeSheets(); return; }
+  if(e.key==='Escape'){ if(selectedCell) hideCellPop(); else closeSheets(); return; }
   if(e.key==='Tab') trapTab(e);
 });
 

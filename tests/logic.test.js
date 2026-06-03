@@ -232,6 +232,58 @@ test('cellLevel grades weak (inaccurate or slow), ok, strong', () => {
   assert.equal(Z.cellLevel({ count: 5, correct: 4, totalMs: 4800 }, 1000), 2);  // 80% acc, avg 1200 -> ok
 });
 
+/* ===================== mastery decay ("garden you tend") ===================== */
+const DAY = 86400000;
+
+test('masteryGrid records minMs (fastest correct) and lastTs (most recent attempt)', () => {
+  const problems = [
+    { operation: TIMES, operand1: 7, operand2: 8, correctAnswer: 56, wasCorrect: true,  msToAnswer: 1500, timestamp: 1000 },
+    { operation: TIMES, operand1: 8, operand2: 7, correctAnswer: 56, wasCorrect: true,  msToAnswer: 900,  timestamp: 5000 }, // folds; faster + later
+    { operation: TIMES, operand1: 7, operand2: 8, correctAnswer: 56, wasCorrect: false, msToAnswer: 4000, timestamp: 9000 }, // wrong: refreshes recency, not minMs
+  ];
+  const cell = Z.masteryGrid(problems, TIMES, 12, 1000).cells[6][7];
+  assert.equal(cell.minMs, 900);   // fastest CORRECT only
+  assert.equal(cell.lastTs, 9000); // ANY attempt (even a miss) counts as practiced
+});
+
+test('cellFreshness ramps 1 inside the grace window down to 0 at the stale horizon', () => {
+  const now = 100 * DAY;
+  assert.equal(Z.cellFreshness(0, now).stage, 'none');                          // never practiced
+  const fresh = Z.cellFreshness(now - 3 * DAY, now, 7, 21);
+  assert.equal(fresh.stage, 'fresh'); assert.equal(fresh.frac, 1);
+  assert.equal(Z.cellFreshness(now - 7 * DAY, now, 7, 21).stage, 'fresh');      // edge of grace is still fresh
+  const aging = Z.cellFreshness(now - 14 * DAY, now, 7, 21);                    // halfway: (14-7)/(21-7)=0.5
+  assert.equal(aging.stage, 'aging'); assert.equal(aging.frac.toFixed(2), '0.50');
+  const stale = Z.cellFreshness(now - 30 * DAY, now, 7, 21);
+  assert.equal(stale.stage, 'stale'); assert.equal(stale.frac, 0);
+});
+
+test('masteryView fades ONLY strong cells: green → amber → needs-tending', () => {
+  const now = 100 * DAY;
+  const strong = lastTs => ({ level: 3, lastTs });
+  // fresh strong: stays green, no decay
+  let v = Z.masteryView(strong(now - 2 * DAY), now, { freshDays: 7, staleDays: 21 });
+  assert.equal(v.displayLevel, 3); assert.equal(v.decay, 0); assert.equal(v.tending, false);
+  // aging strong: STILL counts as strong (display 3) but decay is partway (paints toward amber)
+  v = Z.masteryView(strong(now - 14 * DAY), now, { freshDays: 7, staleDays: 21 });
+  assert.equal(v.displayLevel, 3); assert.ok(v.decay > 0 && v.decay < 1); assert.equal(v.tending, false);
+  // stale strong: demoted to amber (display 2), flagged tending, fully decayed
+  v = Z.masteryView(strong(now - 30 * DAY), now, { freshDays: 7, staleDays: 21 });
+  assert.equal(v.displayLevel, 2); assert.equal(v.decay, 1); assert.equal(v.tending, true);
+  // defaults (7/21) are used when no opts passed: 10 days → aging
+  assert.equal(Z.masteryView(strong(now - 10 * DAY), now).stage, 'aging');
+});
+
+test('masteryView leaves ok/weak/unseen untouched, and never wilts un-timestamped data', () => {
+  const now = 100 * DAY;
+  assert.equal(Z.masteryView({ level: 2, lastTs: now - 60 * DAY }, now).displayLevel, 2); // ok: no decay
+  assert.equal(Z.masteryView({ level: 1, lastTs: now - 60 * DAY }, now).displayLevel, 1); // weak: no decay
+  assert.equal(Z.masteryView(null, now).displayLevel, 0);                                 // unseen
+  // a strong cell with no timestamp (pre-decay imported data) can't be aged → stays green
+  const v = Z.masteryView({ level: 3, lastTs: 0 }, now);
+  assert.equal(v.displayLevel, 3); assert.equal(v.decay, 0); assert.equal(v.tending, false);
+});
+
 /* ===================== opStats ===================== */
 test('opStats aggregates per op, in OP_ORDER, skipping ops with no data', () => {
   const problems = [
