@@ -415,9 +415,38 @@
   }
   .game-top .logo{font-size:20px;color:var(--muted);}
   .game-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:14px;padding-bottom:22px;}
-  .game-stat{font-variant-numeric:tabular-nums;letter-spacing:.02em;}
-  #game-time{font-size:40px;font-weight:700;color:var(--signal-ink);text-shadow:0 0 22px var(--signal-glow);}
-  #game-score{font-size:15px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+
+  /* in-game gauges: a depleting time ring + a centre-out ghost meter, so time
+     and pace read at a glance without parsing scrolling numbers. */
+  .game-gauge{display:flex;flex-direction:column;align-items:center;gap:15px;margin-bottom:8px;}
+  .time-ring{position:relative;width:98px;height:98px;}
+  .ring-svg{width:100%;height:100%;display:block;}
+  .ring-track{fill:none;stroke:var(--panel-2);stroke-width:6;}
+  .ring-arc{fill:none;stroke-width:6;stroke-linecap:round;
+    transition:stroke-dashoffset .2s linear,stroke .25s ease;}
+  .ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:27px;font-weight:700;font-variant-numeric:tabular-nums;font-family:var(--mono);letter-spacing:-.01em;}
+  .time-ring.gaunt .ring-num{font-size:21px;}
+  /* urgency drives both the arc and the readout colour */
+  .time-ring[data-lvl="ok"]   .ring-arc{stroke:var(--signal-ink);filter:drop-shadow(0 0 5px var(--signal-glow));}
+  .time-ring[data-lvl="ok"]   .ring-num{color:var(--signal-ink);}
+  .time-ring[data-lvl="warn"] .ring-arc{stroke:var(--amber-ink);filter:drop-shadow(0 0 5px var(--amber-glow));}
+  .time-ring[data-lvl="warn"] .ring-num{color:var(--amber-ink);}
+  .time-ring[data-lvl="crit"] .ring-arc{stroke:var(--red-ink);}
+  .time-ring[data-lvl="crit"] .ring-num{color:var(--red-ink);}
+  .time-ring[data-lvl="crit"]{animation:ringpulse 1s ease-in-out infinite;}
+  @keyframes ringpulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+
+  .ghost-meter{display:flex;flex-direction:column;align-items:center;gap:8px;min-height:32px;}
+  .ghost-meter[hidden]{display:none;}   /* author display:flex would otherwise beat [hidden] */
+  .gm-track{position:relative;width:228px;height:11px;border-radius:7px;background:var(--panel-2);border:1px solid var(--line);}
+  .gm-center{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;border-radius:1px;background:var(--line-2);transform:translateX(-50%);}
+  .gm-fill{position:absolute;top:0;bottom:0;width:0;border-radius:7px;transition:left .25s ease,width .25s ease,background .2s ease;}
+  .ghost-meter.ahead  .gm-fill{background:var(--ok);box-shadow:0 0 12px var(--signal-glow);}
+  .ghost-meter.behind .gm-fill{background:var(--amber);box-shadow:0 0 12px var(--amber-glow);}
+  .gm-icon{display:flex;color:var(--muted);transition:color .2s ease;}
+  .ghost-meter.ahead  .gm-icon{color:var(--ok-ink);}
+  .ghost-meter.behind .gm-icon{color:var(--amber-ink);}
   .problem{
     font-size:46px;font-weight:600;letter-spacing:1px;font-variant-numeric:tabular-nums;
     margin:6px 0;animation:probin .18s ease;
@@ -432,15 +461,6 @@
   }
   #answer:focus{border-bottom-color:var(--signal-ink);box-shadow:0 6px 14px -10px var(--signal-glow-strong);}
   #answer::placeholder{color:var(--faint);font-weight:400;}
-
-  /* in-game ghost readout */
-  .game-ghost{
-    display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--muted);
-    min-height:19px;font-variant-numeric:tabular-nums;
-  }
-  .game-ghost.ahead{color:var(--ok-ink);}
-  .game-ghost.behind{color:var(--amber-ink);}
-  .game-ghost svg{opacity:.85;}
 
   /* ---------- sheets ---------- */
   #backdrop{
@@ -722,9 +742,19 @@
     <button class="sheet-close" id="btn-quit" style="position:static;" aria-label="Quit game">&times;</button>
   </div>
   <div class="game-body">
-    <div class="game-stat" id="game-time">Time: 120</div>
-    <div class="game-stat" id="game-score">Score: 0</div>
-    <div class="game-ghost" id="game-ghost" hidden></div>
+    <div class="game-gauge">
+      <div class="time-ring" id="time-ring" data-lvl="ok" role="timer" aria-label="Time remaining">
+        <svg class="ring-svg" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="ring-track" cx="50" cy="50" r="44"></circle>
+          <circle class="ring-arc" id="ring-arc" cx="50" cy="50" r="44" transform="rotate(-90 50 50)"></circle>
+        </svg>
+        <div class="ring-num" id="ring-num">120</div>
+      </div>
+      <div class="ghost-meter" id="ghost-meter" hidden aria-hidden="true">
+        <div class="gm-track"><span class="gm-center"></span><span class="gm-fill" id="gm-fill"></span></div>
+        <span class="gm-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V11a9 9 0 0 1 18 0v10l-3-2-3 2-3-2-3 2-3-2z"/><line x1="9" y1="10" x2="9" y2="10.5"/><line x1="15" y1="10" x2="15" y2="10.5"/></svg></span>
+      </div>
+    </div>
     <div class="problem" id="game-problem">&nbsp;</div>
     <input id="answer" inputmode="numeric" aria-label="Answer" autocomplete="off" autocorrect="off"
            autocapitalize="off" spellcheck="false" placeholder="Answer">
@@ -957,7 +987,7 @@ if(typeof Z==='undefined'){
 const { dayKey, parseKey, addDays,
         dayCounts, currentStreak, bestStreak, reconcileFreezes,
         defaultProgress, normalizeProgress, xpForSession, awardXp,
-        canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt,
+        canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt, ghostMeter, timeRingState,
         masteryBaseline, masteryGrid, opStats, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
         parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
@@ -1183,24 +1213,47 @@ function trapTab(e){
    =================================================================== */
 let game=null;
 
+/* ---- in-game gauges (ring = time, meter = ghost pace) ----
+   Both are driven from pure helpers in app-logic.js so the thresholds/scale
+   are unit-tested; here we just paint the SVG arc and the centre-out bar. */
+const RING_R=44, RING_C=2*Math.PI*RING_R;
+function setTimeRing(frac,level,label){
+  frac=Math.max(0,Math.min(1,frac));
+  const arc=$('ring-arc');
+  arc.style.strokeDasharray=RING_C.toFixed(2);
+  arc.style.strokeDashoffset=(RING_C*(1-frac)).toFixed(2);
+  $('time-ring').dataset.lvl=level;
+  $('ring-num').textContent=label;
+}
+/* Paint the ghost meter from the current score vs the ghost's score-so-far.
+   Reads live state so it can be called on every tick AND right after a solve. */
+function updateGhostMeter(){
+  if(!game||!game.ghost) return;
+  const elapsed=performance.now()-game.startTime;
+  const m=ghostMeter(game.problems.length,ghostScoreAt(game.ghost.rate,elapsed));
+  const pct=m.frac*50;                       // 0..50% off the centre line
+  const fill=$('gm-fill');
+  fill.style.left=(m.side==='behind'?50-pct:50)+'%';
+  fill.style.width=pct+'%';
+  $('ghost-meter').className='ghost-meter '+m.side;
+}
+
 function beginGame(cfg,ghost){
   game={
     sessionId:uuid(), config:cfg, durationMs:cfg.durationSec*1000,
     problems:[], wrongAnswer:null, ended:false,
     startedAtISO:new Date().toISOString(),
-    ghost:ghost||null, ghostShown:-1,
+    ghost:ghost||null,
   };
   queue=[]; fillQueue(cfg);
   game.startTime=performance.now();
   game.current=nextFromQueue(cfg);
   game.problemStart=game.startTime;
   $('game-problem').textContent=game.current.display;
-  $('game-score').textContent='Score: 0';
-  $('game-time').textContent='Time: '+cfg.durationSec;
-  const gh=$('game-ghost');
-  gh.hidden=!game.ghost;
-  gh.className='game-ghost';
-  if(game.ghost) gh.innerHTML=GHOST_SVG+'<span>Ghost 0</span>';
+  $('time-ring').classList.remove('gaunt');
+  setTimeRing(1,'ok',String(cfg.durationSec));
+  $('ghost-meter').hidden=!game.ghost;       // usually attached just after; meter appears then
+  if(game.ghost) updateGhostMeter();
   $('answer').value='';
   showScreen('game');
   $('answer').focus();   /* bring up the native iOS numeric keyboard */
@@ -1216,10 +1269,9 @@ async function attachGhost(presetName){
   const sid=game.sessionId;
   const ghost=pickGhost(await Store.getSessions(),presetName);
   if(!ghost||!game||game.ended||game.sessionId!==sid) return;
-  game.ghost=ghost; game.ghostShown=-1;
-  const gh=$('game-ghost');
-  gh.hidden=false; gh.className='game-ghost';
-  gh.innerHTML=GHOST_SVG+'<span>Ghost 0</span>';
+  game.ghost=ghost;
+  $('ghost-meter').hidden=false;
+  updateGhostMeter();
 }
 
 function startGame(){
@@ -1261,9 +1313,9 @@ function beginGauntlet(snap){
   game.current=game.facts[0];
   game.problemStart=game.startTime;
   $('game-problem').textContent=game.current.display;
-  $('game-score').textContent='0 / '+game.facts.length;
-  $('game-time').textContent='0.0s';
-  $('game-ghost').hidden=true;
+  $('time-ring').classList.add('gaunt');
+  setTimeRing(0,'ok','0.0s');                 // ring fills with fact progress; centre = elapsed
+  $('ghost-meter').hidden=true;
   $('answer').value='';
   showScreen('game');
   $('answer').focus();   /* bring up the native iOS numeric keyboard */
@@ -1272,22 +1324,14 @@ function beginGauntlet(snap){
 
 function tick(){
   const elapsed=performance.now()-game.startTime;
-  if(game.mode==='gauntlet'){               // count up; ends on the last fact, no ghost
-    $('game-time').textContent=(elapsed/1000).toFixed(1)+'s';
+  if(game.mode==='gauntlet'){               // count up; ring fills by fact progress, no ghost
+    setTimeRing(game.idx/game.facts.length,'ok',(elapsed/1000).toFixed(1)+'s');
     return;
   }
   const remaining=game.durationMs-elapsed;
-  $('game-time').textContent='Time: '+Math.max(0,Math.ceil(remaining/1000));
-  if(game.ghost){
-    const g=ghostScoreAt(game.ghost.rate,elapsed);
-    if(g!==game.ghostShown){
-      game.ghostShown=g;
-      const diff=game.problems.length-g;
-      const gh=$('game-ghost');
-      gh.className='game-ghost'+(diff>=0?' ahead':' behind');
-      gh.innerHTML=GHOST_SVG+'<span>Ghost '+g+' &middot; '+(diff>=0?'+'+diff:diff)+'</span>';
-    }
-  }
+  const st=timeRingState(remaining,game.durationMs);
+  setTimeRing(st.frac,st.level,String(Math.max(0,Math.ceil(remaining/1000))));
+  if(game.ghost) updateGhostMeter();
   if(remaining<=0){ endGame().catch(err=>console.error('endGame failed',err)); }
 }
 
@@ -1330,14 +1374,14 @@ function advance(){
     game.problemStart=performance.now();
     $('answer').value='';
     $('game-problem').textContent=game.current.display;
-    $('game-score').textContent=game.idx+' / '+game.facts.length;
+    setTimeRing(game.idx/game.facts.length,'ok',((performance.now()-game.startTime)/1000).toFixed(1)+'s');
     return;
   }
   game.current=nextFromQueue(game.config);
   game.problemStart=performance.now();
   $('answer').value='';
   $('game-problem').textContent=game.current.display;
-  $('game-score').textContent='Score: '+game.problems.length;
+  if(game.ghost) updateGhostMeter();   // reflect your fresh solve immediately
 }
 
 async function endGame(){

@@ -210,6 +210,24 @@
     return Math.floor(rate * (elapsedMs / 1000));
   }
 
+  /* ---- in-game gauges (pure; drive the ring + ghost meter) ---- */
+  // How far ahead/behind the ghost, as a 0..1 bar fraction off centre. `range`
+  // is the lead (in problems) that fills the bar to its end; bigger gaps pin.
+  const GHOST_METER_RANGE = 6;
+  function ghostMeter(your, ghost, range = GHOST_METER_RANGE) {
+    const diff = (your || 0) - (ghost || 0);
+    const r = range > 0 ? range : GHOST_METER_RANGE;
+    const frac = Math.min(1, Math.abs(diff) / r);
+    return { diff, side: diff > 0 ? 'ahead' : diff < 0 ? 'behind' : 'even', frac };
+  }
+  // Time remaining as a 0..1 ring fraction plus an urgency level. Thresholds are
+  // on the fraction (not absolute seconds) so they scale to any game length.
+  function timeRingState(remainingMs, totalMs) {
+    const frac = totalMs > 0 ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 0;
+    const level = frac <= 0.08 ? 'crit' : frac <= 0.2 ? 'warn' : 'ok';
+    return { frac, level };
+  }
+
   /* ---- mastery grids ----
      Map every problem onto one of two fluency fact-families viewed per op:
        ×  : the two factors            (operand1, operand2)
@@ -594,7 +612,7 @@
     answerFor, canonFact, factKey, genProblem,
     dayCounts, daySatisfied, currentStreak, bestStreak, reconcileFreezes,
     defaultProgress, normalizeProgress, xpForSession, awardXp, canBuyFreeze, buyFreeze,
-    pickGhost, ghostScoreAt,
+    pickGhost, ghostScoreAt, ghostMeter, timeRingState, GHOST_METER_RANGE,
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     opStats, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,

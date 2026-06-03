@@ -176,6 +176,28 @@ test('ghostScoreAt advances at a steady rate', () => {
   assert.equal(Z.ghostScoreAt(0, 10000), 0);
 });
 
+test('ghostMeter reports side + a 0..1 fraction that pins past the range', () => {
+  assert.deepEqual(Z.ghostMeter(5, 5), { diff: 0, side: 'even', frac: 0 });
+  const ahead = Z.ghostMeter(8, 5, 6);                 // +3 of 6 → half
+  assert.equal(ahead.side, 'ahead');
+  assert.equal(ahead.frac, 0.5);
+  const behind = Z.ghostMeter(2, 5, 6);                // -3 of 6 → half, behind
+  assert.equal(behind.side, 'behind');
+  assert.equal(behind.frac, 0.5);
+  assert.equal(Z.ghostMeter(20, 5, 6).frac, 1);        // big lead pins at full
+  assert.equal(Z.ghostMeter(0, 9, 6).frac, 1);         // big deficit pins at full
+});
+
+test('timeRingState fraction scales to any length; level escalates at 20% / 8%', () => {
+  assert.deepEqual(Z.timeRingState(60000, 120000), { frac: 0.5, level: 'ok' });
+  assert.equal(Z.timeRingState(30000, 120000).level, 'ok');     // 25% → ok
+  assert.equal(Z.timeRingState(24000, 120000).level, 'warn');   // 20% boundary → warn
+  assert.equal(Z.timeRingState(12000, 120000).level, 'warn');   // 10% → warn
+  assert.equal(Z.timeRingState(9000, 120000).level, 'crit');    // 7.5% → crit
+  assert.equal(Z.timeRingState(-5, 120000).frac, 0);            // clamps at empty
+  assert.equal(Z.timeRingState(5000, 0).frac, 0);               // guards totalMs=0
+});
+
 /* ===================== mastery grid ===================== */
 test('masteryGrid folds ×, places by factor, and skips out-of-range facts', () => {
   const baseline = 1000;
