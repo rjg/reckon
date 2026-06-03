@@ -164,7 +164,17 @@
 
   /* ---- progress / XP ---- */
   function defaultProgress() {
-    return { xp: 0, xpLifetime: 0, freezes: 0, freezeDays: {}, gauntletClears: {}, gauntletMedals: {}, v: 1 };
+    return {
+      xp: 0, xpLifetime: 0, freezes: 0, freezeDays: {}, gauntletClears: {}, gauntletMedals: {},
+      trophies: {}, trophiesSeenAt: 0, stats: { probs: 0, fastestMs: 0 }, v: 1,
+    };
+  }
+  /* running aggregates that need every problem (so trophies can be judged without
+     a full DB scan): lifetime problem count + fastest correct solve. Kept best-
+     effort up to date by the glue; the Trophy Case recomputes authoritatively. */
+  function normalizeStats(s) {
+    if (!s || typeof s !== 'object') return { probs: 0, fastestMs: 0 };
+    return { probs: Math.max(0, Math.floor(s.probs) || 0), fastestMs: Math.max(0, Math.floor(s.fastestMs) || 0) };
   }
   /* normalize a loaded record so older/partial shapes don't crash callers */
   function normalizeProgress(p) {
@@ -177,6 +187,10 @@
       freezeDays: (p.freezeDays && typeof p.freezeDays === 'object') ? p.freezeDays : {},
       gauntletClears: (p.gauntletClears && typeof p.gauntletClears === 'object') ? p.gauntletClears : {},
       gauntletMedals: (p.gauntletMedals && typeof p.gauntletMedals === 'object') ? p.gauntletMedals : {},
+      // trophies map values are earn-timestamps (ms) — keep verbatim (never |0; that truncates ms)
+      trophies: (p.trophies && typeof p.trophies === 'object') ? p.trophies : {},
+      trophiesSeenAt: Math.max(0, Number(p.trophiesSeenAt) || 0),
+      stats: normalizeStats(p.stats),
       v: 1,
     };
   }
@@ -554,6 +568,161 @@
     };
   }
 
+  /* ---- ranks & trophies (give XP a destination) ----
+     xpLifetime used to be vanity — it counted up with nothing attached. Two pure
+     layers fix that (pure ⇒ unit-tested ⇒ the UI is just paint):
+       · RANKS  — a lifetime-XP ladder, a title you climb (Novice → Luminary).
+       · TROPHY_DEFS — a catalog of collectible emblems earned across systems the
+         app already has (ranks, streak, gauntlet medals, volume, speed records,
+         mastery) plus a few SECRET ones (hidden until earned — the "surprise").
+     Each trophy is a predicate over a flat `stats` bundle the glue computes.
+     evaluateTrophies returns who's satisfied; reconcileTrophies folds that into a
+     persisted, MONOTONIC earned-set on `progress` (once earned, never lost — even
+     if the underlying stat later regresses, e.g. a mastered fact wilting). */
+  const RANKS = [
+    { key: 'novice',     name: 'Novice',     xp: 0 },
+    { key: 'apprentice', name: 'Apprentice', xp: 500 },
+    { key: 'adept',      name: 'Adept',      xp: 1500 },
+    { key: 'reckoner',   name: 'Reckoner',   xp: 4000 },
+    { key: 'tactician',  name: 'Tactician',  xp: 9000 },
+    { key: 'savant',     name: 'Savant',     xp: 20000 },
+    { key: 'virtuoso',   name: 'Virtuoso',   xp: 40000 },
+    { key: 'master',     name: 'Master',     xp: 75000 },
+    { key: 'luminary',   name: 'Luminary',   xp: 150000 },
+  ];
+  /* current rank + progress toward the next, from lifetime XP. At the top rank
+     `next` is null, `progress` pins to 1, and `xpForNext` is 0. */
+  function rankForXp(xpLifetime) {
+    const xp = Math.max(0, Math.floor(xpLifetime || 0));
+    let i = 0;
+    for (let k = 0; k < RANKS.length; k++) if (xp >= RANKS[k].xp) i = k;
+    const rank = RANKS[i], next = RANKS[i + 1] || null;
+    const span = next ? next.xp - rank.xp : 0;
+    const into = xp - rank.xp;
+    return {
+      index: i, rank, next, isMax: !next,
+      xpIntoRank: into, xpForNext: next ? next.xp - xp : 0,
+      progress: next ? Math.max(0, Math.min(1, into / span)) : 1,
+    };
+  }
+  /* longest run of consecutive cleared days in the gauntlet-clears map (mirrors
+     bestStreak, but over clears instead of the daily goal). */
+  function bestGauntletStreak(clears) {
+    if (!clears) return 0;
+    const days = Object.keys(clears).filter(k => clears[k] != null).sort();
+    let best = 0, run = 0, prev = null;
+    for (const k of days) {
+      run = (prev && dayKey(addDays(parseKey(prev), 1)) === k) ? run + 1 : 1;
+      if (run > best) best = run;
+      prev = k;
+    }
+    return best;
+  }
+
+  /* trophy thresholds — pulled out so tests and the UI can reference them. */
+  const TROPHY = {
+    PERFECT_MIN: 30,                      // a "flawless" game must be at least this many problems
+    QUICKDRAW_MS: 1000, LIGHTNING_MS: 600,
+    HIGH_SCORE: 100,
+    VOL: [100, 1000, 10000], STRONG: [25, 100],
+    DAY_STREAK: [7, 30, 100], GAUNT_STREAK: 7, GOLDS: 10,
+  };
+  const fastWithin = (s, ms) => (s.fastestCorrectMs > 0 && s.fastestCorrectMs <= ms);
+  /* one trophy per rank above Novice (Novice xp 0 is the START, not an unlock). */
+  const RANK_TROPHIES = RANKS.slice(1).map(r => ({
+    id: 'rank-' + r.key, group: 'rank', icon: 'rank', name: r.name,
+    desc: 'Reach the rank of ' + r.name, rankXp: r.xp,
+    reached: s => (s.xpLifetime || 0) >= r.xp,
+    progress: s => ({ cur: Math.min(s.xpLifetime || 0, r.xp), target: r.xp }),
+  }));
+  /* the catalog. `icon` names a line-icon the UI provides; `reached(stats)` is the
+     pure earn test; `progress(stats)` (optional) drives a progress bar. A stat a
+     trophy needs but a cheap reconcile didn't compute is simply absent → its
+     predicate reads it as 0 → not-yet-earned (and the authoritative full-scan
+     reconcile the Trophy Case runs catches it). `secret` ⇒ hidden as "???" until
+     earned. */
+  const TROPHY_DEFS = RANK_TROPHIES.concat([
+    // streak — a day-streak you held
+    ...TROPHY.DAY_STREAK.map((n, i) => ({
+      id: 'streak-' + n, group: 'streak', icon: 'flame', name: ['On Fire', 'Devoted', 'Unbroken'][i],
+      desc: 'Hold a ' + n + '-day streak',
+      reached: s => (s.bestDayStreak || 0) >= n, progress: s => ({ cur: Math.min(s.bestDayStreak || 0, n), target: n }),
+    })),
+    // gauntlet — the daily race
+    { id: 'gaunt-first', group: 'gauntlet', icon: 'bolt', name: 'Into the Gauntlet',
+      desc: 'Clear your first daily gauntlet', reached: s => (s.totalGauntlets || 0) >= 1 },
+    { id: 'gaunt-gold', group: 'gauntlet', icon: 'medal', name: 'Struck Gold',
+      desc: 'Earn a gold medal', reached: s => (s.golds || 0) >= 1 },
+    { id: 'gaunt-gold10', group: 'gauntlet', icon: 'medal', name: 'Gold Hoard',
+      desc: 'Collect ' + TROPHY.GOLDS + ' gold medals', reached: s => (s.golds || 0) >= TROPHY.GOLDS,
+      progress: s => ({ cur: Math.min(s.golds || 0, TROPHY.GOLDS), target: TROPHY.GOLDS }) },
+    { id: 'gaunt-streak7', group: 'gauntlet', icon: 'bolt', name: 'Relentless',
+      desc: 'Clear the gauntlet ' + TROPHY.GAUNT_STREAK + ' days running',
+      reached: s => (s.bestGauntletStreak || 0) >= TROPHY.GAUNT_STREAK,
+      progress: s => ({ cur: Math.min(s.bestGauntletStreak || 0, TROPHY.GAUNT_STREAK), target: TROPHY.GAUNT_STREAK }) },
+    // volume — problems answered, lifetime
+    ...TROPHY.VOL.map((n, i) => ({
+      id: 'vol-' + n, group: 'volume', icon: 'layers', name: ['Centurion', 'Thousand Sums', 'Ten Thousand Things'][i],
+      desc: ['Answer 100 problems', 'Answer 1,000 problems', 'Answer 10,000 problems'][i],
+      reached: s => (s.totalProblems || 0) >= n, progress: s => ({ cur: Math.min(s.totalProblems || 0, n), target: n }),
+    })),
+    // speed & records
+    { id: 'rec-quickdraw', group: 'records', icon: 'target', name: 'Quickdraw',
+      desc: 'Answer correctly in under 1.0s', reached: s => fastWithin(s, TROPHY.QUICKDRAW_MS) },
+    { id: 'rec-lightning', group: 'records', icon: 'bolt', name: 'Lightning',
+      desc: 'Answer correctly in under 0.6s', reached: s => fastWithin(s, TROPHY.LIGHTNING_MS) },
+    { id: 'rec-highscore', group: 'records', icon: 'trophy', name: 'High Score',
+      desc: 'Solve ' + TROPHY.HIGH_SCORE + '+ in a single game', reached: s => (s.bestScore || 0) >= TROPHY.HIGH_SCORE,
+      progress: s => ({ cur: Math.min(s.bestScore || 0, TROPHY.HIGH_SCORE), target: TROPHY.HIGH_SCORE }) },
+    // mastery — the fluency grid
+    ...TROPHY.STRONG.map((n, i) => ({
+      id: 'mas-' + n, group: 'mastery', icon: 'sprout', name: ['Green Thumb', 'Cultivated'][i],
+      desc: 'Make ' + n + ' facts strong',
+      reached: s => (s.strongFacts || 0) >= n, progress: s => ({ cur: Math.min(s.strongFacts || 0, n), target: n }),
+    })),
+    { id: 'mas-table', group: 'mastery', icon: 'grid', name: 'Table Master',
+      desc: 'Turn an entire table green', reached: s => !!s.tableMastered },
+    { id: 'mas-allops', group: 'mastery', icon: 'star', name: 'Polymath',
+      desc: 'Be strong in all four operations', reached: s => (s.opsWithStrong || 0) >= 4,
+      progress: s => ({ cur: Math.min(s.opsWithStrong || 0, 4), target: 4 }) },
+    // secret — hidden until earned (the surprise)
+    { id: 'sec-flawless', group: 'secret', icon: 'sparkle', name: 'Flawless', secret: true,
+      desc: 'Finish a ' + TROPHY.PERFECT_MIN + '+ problem game with no mistakes', reached: s => !!s.perfectGame },
+    { id: 'sec-nightowl', group: 'secret', icon: 'moon', name: 'Night Owl', secret: true,
+      desc: 'Play between midnight and 5am', reached: s => !!s.nightOwl },
+    { id: 'sec-saved', group: 'secret', icon: 'shield', name: 'Saved', secret: true,
+      desc: 'Let a streak freeze rescue your streak', reached: s => !!s.usedFreeze },
+  ]);
+  const TROPHY_TOTAL = TROPHY_DEFS.length;
+  const TROPHY_BY_ID = {};
+  for (const t of TROPHY_DEFS) TROPHY_BY_ID[t.id] = t;
+
+  /* ids of every trophy currently satisfied by `stats`, in catalog order (pure). */
+  function evaluateTrophies(stats) {
+    stats = stats || {};
+    const out = [];
+    for (const t of TROPHY_DEFS) { try { if (t.reached(stats)) out.push(t.id); } catch (e) {} }
+    return out;
+  }
+  /* fold the satisfied set into progress.trophies (id → earnedAt ms), NEVER
+     removing. Returns the defs newly earned THIS call (for the unlock reveal), in
+     catalog order. Pure aside from mutating `progress`. */
+  function reconcileTrophies(progress, stats, nowMs) {
+    progress.trophies = progress.trophies || {};
+    const fresh = [];
+    for (const id of evaluateTrophies(stats)) {
+      if (progress.trophies[id] == null) { progress.trophies[id] = nowMs || 0; fresh.push(TROPHY_BY_ID[id]); }
+    }
+    return fresh;
+  }
+  /* {earned, total} for the home hint (counts only ids still in the catalog). */
+  function trophyCounts(progress) {
+    const t = progress && progress.trophies;
+    let earned = 0;
+    if (t) for (const k in t) if (t[k] != null && TROPHY_BY_ID[k]) earned++;
+    return { earned, total: TROPHY_TOTAL };
+  }
+
   /* ---- CSV import (the inverse of index.html's downloadCSV) ----
      The export writes one row per problem with its session's metadata
      denormalized on. buildImport regroups rows by sessionId and rebuilds each
@@ -716,9 +885,19 @@
       const v = inc.gauntletMedals[k];
       if ((MEDAL_RANK[v] || 0) > (MEDAL_RANK[gauntletMedals[k]] || 0)) gauntletMedals[k] = v;
     }
+    const trophies = Object.assign({}, cur.trophies);
+    for (const k in inc.trophies) {                       // union; keep the EARLIER earn time
+      const v = inc.trophies[k];
+      if (v == null) continue;
+      if (trophies[k] == null || v < trophies[k]) trophies[k] = v;
+    }
+    const probs = Math.max(cur.stats.probs, inc.stats.probs);   // best-effort; Trophy Case recomputes from a full scan
+    const fastestMs = [cur.stats.fastestMs, inc.stats.fastestMs].filter(x => x > 0).sort((a, b) => a - b)[0] || 0;
     return {
       xp: Math.max(cur.xp, inc.xp), xpLifetime: Math.max(cur.xpLifetime, inc.xpLifetime),
-      freezes: Math.max(cur.freezes, inc.freezes), freezeDays, gauntletClears, gauntletMedals, v: 1,
+      freezes: Math.max(cur.freezes, inc.freezes), freezeDays, gauntletClears, gauntletMedals,
+      trophies, trophiesSeenAt: Math.max(cur.trophiesSeenAt, inc.trophiesSeenAt),
+      stats: { probs, fastestMs }, v: 1,
     };
   }
 
@@ -759,6 +938,8 @@
     opStats, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
     gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_RANK, MEDAL_TIERS, MEDAL_XP,
+    RANKS, rankForXp, bestGauntletStreak,
+    TROPHY, TROPHY_DEFS, TROPHY_TOTAL, TROPHY_BY_ID, evaluateTrophies, reconcileTrophies, trophyCounts,
     parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
   };
 });

@@ -83,9 +83,25 @@ a local PWA — IndexedDB only, no backend; "compete" = against your own past).
 
 ---
 
-## Direction 3 — Give XP a destination
+## Direction 3 — Give XP a destination  *(✓ SHIPPED 2026-06-02)*
 
-`xpLifetime` is currently vanity with nothing attached; XP only buys freezes
+> Shipped as **Ranks + a Trophy Case** (folded together with the open "trophies/
+> shapes/wall" TODO — same wish). Lifetime XP now climbs a 9-rung named ladder
+> (`RANKS`/`rankForXp`, unit-tested); the home XP line became a tappable **rank
+> row** (polygon insignia that gains a side per rank, progress bar, trophy tally).
+> The **Trophy Case** sheet is the wall: rank hero + ladder + a grouped grid of
+> 28 collectible SVG **emblems** (`TROPHY_DEFS`/`evaluateTrophies`/
+> `reconcileTrophies`, monotonic & persisted on `progress.trophies`). Emblems
+> span ranks, streaks, gauntlet medals, volume, speed **records** (← the records-
+> wall idea, as chase-able tiles), and mastery, plus **secret** ones hidden as
+> "???" until earned (the surprise). Reveal = a NEW badge + a home-row dot + a
+> rank-up confetti. Perf: a cheap reconcile (sessions + progress, no scan) runs on
+> the home screen; the mastery/fastest-answer full scan only runs when the Mastery
+> sheet or the Case opens. **Not** done: ranks unlocking new *palettes* — designing
+> a whole palette's colours is a "render-options-and-let-me-pick" call, left as a
+> follow-up; the reward today is ranks + the emblem collection.
+
+`xpLifetime` was vanity with nothing attached; XP only bought freezes
 (`FREEZE_COST=1000`, `awardXp`/`buyFreeze` `app-logic.js:183`/`192`).
 
 - **Belts / ranks** *(Low)* — map `xpLifetime` to named tiers (white → black

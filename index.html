@@ -180,7 +180,7 @@
   }
   :root[data-palette="zen"] h3{letter-spacing:.05em;}
   :root[data-palette="zen"] .gc-kicker,
-  :root[data-palette="zen"] .xp-lab,
+  :root[data-palette="zen"] .rk-sub,
   :root[data-palette="zen"] .stat-card .k,
   :root[data-palette="zen"] .today-lbl{letter-spacing:.06em;}
 
@@ -339,14 +339,7 @@
   .frz-buy.off{background:var(--panel-2);color:var(--faint);border-color:var(--line);}
   .frz-buy:active{filter:brightness(1.15);}
 
-  /* XP row */
-  .xp-row{
-    display:flex;align-items:baseline;gap:9px;margin-top:14px;padding-top:13px;
-    border-top:1px solid var(--line);
-  }
-  .xp-lab{font-size:11px;font-weight:700;color:var(--amber-ink);letter-spacing:.16em;}
-  .xp-val{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;}
-  .xp-sub{font-size:11px;color:var(--muted);margin-left:auto;}
+  /* (the old flat XP row is replaced by the rank row — see ".rank-row" below) */
 
   /* backup nudge banner */
   .backup-nudge{
@@ -735,6 +728,89 @@
   .gc-medals .gm.bronze{color:var(--medal-bronze);}
   .gc-medals .gm .n{font-size:13px;color:var(--ink-dim);}
 
+  /* ---------- rank row (foot of the streak card → opens the Trophy Case) ----------
+     XP used to be a dead-end readout; now the lifetime total drives a named RANK
+     and the row is the doorway to the case. Violet is the rank/XP/trophy identity
+     (distinct from streak-amber & gauntlet-green); all tokens, both palettes. */
+  .rank-row{
+    display:flex;align-items:center;gap:12px;width:100%;text-align:left;
+    margin-top:14px;padding:13px 4px 3px;border-top:1px solid var(--line);
+    background:none;border-radius:0;transition:opacity .12s;
+  }
+  .rank-row:active{opacity:.6;}
+  .rk-badge{flex:0 0 auto;display:inline-flex;color:var(--violet-ink);filter:drop-shadow(0 0 7px rgb(var(--violet-rgb) / .4));}
+  .rk-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}
+  .rk-top{display:flex;align-items:center;gap:7px;}
+  .rk-name{font-family:var(--disp);font-size:17px;font-weight:800;letter-spacing:-.2px;}
+  .rk-new{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--violet-ink);box-shadow:0 0 7px rgb(var(--violet-rgb) / .8);}
+  .rk-xp{margin-left:auto;font-size:12.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .rk-xp b{color:var(--ink-dim);font-weight:700;}
+  .rk-chev{flex:0 0 auto;display:inline-flex;color:var(--muted);}
+  .rk-bar{position:relative;height:7px;border-radius:5px;background:var(--panel-2);border:1px solid var(--line);overflow:hidden;}
+  .rk-fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--violet);
+    box-shadow:0 0 10px rgb(var(--violet-rgb) / .5);transition:width .5s cubic-bezier(.2,.7,.2,1);}
+  .rk-sub{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
+
+  /* ---------- trophy case ---------- */
+  /* rank hero */
+  .tc-hero{display:flex;align-items:center;gap:14px;margin:8px 0 2px;padding:15px;
+    border-radius:16px;border:1px solid rgb(var(--violet-rgb) / .28);
+    background:radial-gradient(120% 100% at 0% 0%, rgb(var(--violet-rgb) / .14), transparent 60%), var(--panel-2);}
+  .tc-hero-badge{flex:0 0 auto;width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    color:var(--violet-ink);background:rgb(var(--violet-rgb) / .14);box-shadow:inset 0 0 0 1.5px rgb(var(--violet-rgb) / .4);}
+  .tc-hero-main{flex:1;min-width:0;}
+  .tc-hero-rank{font-family:var(--disp);font-size:25px;font-weight:800;letter-spacing:-.3px;line-height:1.04;}
+  .tc-hero-sub{font-size:12px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;}
+  .tc-hero-bar{position:relative;height:8px;border-radius:5px;background:var(--panel);border:1px solid var(--line);overflow:hidden;margin-top:10px;}
+  .tc-hero-fill{position:absolute;top:0;bottom:0;left:0;border-radius:5px;background:var(--violet);box-shadow:0 0 10px rgb(var(--violet-rgb) / .5);}
+  .tc-hero-count{font-size:11px;color:var(--violet-ink);font-weight:700;letter-spacing:.06em;margin-top:9px;text-transform:uppercase;font-variant-numeric:tabular-nums;}
+
+  /* rank ladder — a horizontal strip of rungs */
+  .tc-ladder{display:flex;gap:8px;overflow-x:auto;padding:13px 2px 4px;margin:0 -2px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .tc-ladder::-webkit-scrollbar{display:none;}
+  .tc-rung{flex:0 0 auto;width:66px;display:flex;flex-direction:column;align-items:center;gap:6px;
+    padding:10px 4px;border-radius:12px;border:1px solid var(--line);background:var(--panel-2);color:var(--faint);text-align:center;}
+  .tc-rung.earned{color:var(--violet-ink);border-color:rgb(var(--violet-rgb) / .35);}
+  .tc-rung.current{border-color:var(--violet-ink);background:rgb(var(--violet-rgb) / .1);
+    box-shadow:0 0 0 1px var(--violet-ink),0 8px 20px -12px rgb(var(--violet-rgb) / .6);}
+  .tc-rung-name{font-size:10px;font-weight:700;color:var(--ink-dim);letter-spacing:.01em;}
+  .tc-rung.earned .tc-rung-name,.tc-rung.current .tc-rung-name{color:var(--ink);}
+  .tc-rung-xp{font-size:9.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
+
+  /* trophy groups + tiles */
+  .tc-group{margin-top:22px;}
+  .tc-group-head{display:flex;align-items:baseline;justify-content:space-between;margin:0 2px 10px;}
+  .tc-group-name{font-family:var(--disp);font-size:15px;font-weight:700;}
+  .tc-group-count{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+  .tc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .tc-tile{position:relative;display:flex;flex-direction:column;gap:7px;padding:13px 13px 12px;border-radius:14px;
+    border:1px solid var(--line);background:var(--panel-2);min-height:106px;
+    --tink:var(--faint);--trgb:140 140 140;}
+  .tc-tile .tc-ico{display:inline-flex;color:var(--tink);}
+  .tc-tile.locked{opacity:.6;}
+  .tc-tile.earned{border-color:rgb(var(--trgb) / .42);
+    background:radial-gradient(130% 100% at 0% 0%, rgb(var(--trgb) / .15), transparent 62%), var(--panel-2);}
+  .tc-tile.earned .tc-ico{filter:drop-shadow(0 0 6px rgb(var(--trgb) / .45));}
+  /* group → emblem colour (only once earned; locked stays a quiet graphite) */
+  .tc-tile.earned.tg-rank{--tink:var(--violet-ink);--trgb:var(--violet-rgb);}
+  .tc-tile.earned.tg-streak{--tink:var(--amber-ink);--trgb:var(--amber-rgb);}
+  .tc-tile.earned.tg-gauntlet{--tink:var(--signal-ink);--trgb:var(--signal-rgb);}
+  .tc-tile.earned.tg-volume{--tink:var(--cyan-ink);--trgb:var(--cyan-rgb);}
+  .tc-tile.earned.tg-records{--tink:var(--magenta-ink);--trgb:var(--magenta-rgb);}
+  .tc-tile.earned.tg-mastery{--tink:var(--ok-ink);--trgb:var(--ok-rgb);}
+  .tc-tile.earned.tg-secret{--tink:var(--violet-ink);--trgb:var(--violet-rgb);}
+  .tc-name{font-family:var(--disp);font-size:14.5px;font-weight:700;line-height:1.12;}
+  .tc-tile.locked .tc-name{color:var(--ink-dim);}
+  .tc-tile.secret .tc-name{color:var(--muted);letter-spacing:.06em;}
+  .tc-desc{font-size:11.5px;color:var(--muted);line-height:1.34;margin-top:auto;}
+  .tc-check{position:absolute;top:11px;right:11px;display:inline-flex;color:var(--tink);}
+  .tc-prog{margin-top:auto;}
+  .tc-prog-bar{position:relative;height:5px;border-radius:4px;background:var(--panel);border:1px solid var(--line);overflow:hidden;}
+  .tc-prog-fill{position:absolute;top:0;bottom:0;left:0;border-radius:4px;background:var(--tink);opacity:.75;}
+  .tc-prog-txt{font-size:10.5px;color:var(--muted);margin-top:5px;font-variant-numeric:tabular-nums;}
+  .tc-newbadge{position:absolute;top:9px;right:9px;background:var(--violet);color:var(--on-magenta);
+    font-size:9px;font-weight:800;letter-spacing:.06em;padding:2px 6px;border-radius:7px;}
+
   /* ---------- staggered home entrance ---------- */
   @keyframes rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
   #screen-home.active .home-title,
@@ -1026,6 +1102,18 @@
   </div>
 </div>
 
+<!-- trophy case sheet (rank hero + ladder + grouped emblem wall) -->
+<div class="sheet" id="sheet-trophies" role="dialog" aria-modal="true" aria-label="Trophy Case" tabindex="-1">
+  <div class="grabber"></div>
+  <button class="sheet-close" data-close aria-label="Close">&times;</button>
+  <div class="sheet-inner">
+    <h1>Trophy Case</h1>
+    <div class="muted" style="font-size:13px;">Your lifetime XP earns ranks; milestones across the app earn emblems. Some are hidden until you find them.</div>
+    <div id="trophy-rank"></div>
+    <div id="trophy-body"></div>
+  </div>
+</div>
+
 <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- mastery cell-detail popover (anchored to the tapped grid cell; see showCellPop) -->
@@ -1068,6 +1156,7 @@ const { dayKey, parseKey, addDays,
         masteryBaseline, masteryGrid, cellFreshness, masteryView, opStats, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
         gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_XP,
+        RANKS, rankForXp, bestGauntletStreak, TROPHY, TROPHY_DEFS, trophyCounts, reconcileTrophies,
         parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
         DAILY_GOAL, FREEZE_COST, MAX_FREEZES, GAUNTLET_SIZE, GAUNTLET_WINDOW_DAYS } = Z;
 
@@ -1493,6 +1582,7 @@ async function endGame(){
      memory, so compute it up front — the results sheet shows it even if the
      persistence below fails. */
   const xpEarned=awardXp(progress,xpForSession(session));
+  bumpStats(probs);   // running totals (problem count + fastest correct) for trophies
   const ghost=game.ghost
     ? {your:session.score, ghost:ghostScoreAt(game.ghost.rate,game.elapsedMs)} : null;
 
@@ -1539,6 +1629,7 @@ async function endGauntlet(){
      so the results sheet is right even if the write below fails (quota / Private
      Browsing) */
   const res=recordGauntletClear(progress,game.gauntletDay,ms,medal);
+  bumpStats(probs);   // gauntlet problems also count toward volume / fastest-answer trophies
   const streak=gauntletStreak(progress.gauntletClears,new Date());
   try{
     await Store.addProblems(probs);     // feeds the weak-fact loop + mastery (no session)
@@ -1729,9 +1820,7 @@ async function renderStreak(){
           (affordable?'':' disabled')+'>'+buyLabel+'</button>'+
       '</div>'+
     '</div>'+
-    '<div class="xp-row"><span class="xp-lab">XP</span>'+
-      '<span class="xp-val">'+progress.xp+'</span>'+
-      '<span class="xp-sub">'+progress.xpLifetime+' lifetime &middot; freeze costs '+FREEZE_COST+'</span></div>';
+    rankRowHTML();
 
   if(celebrateGoal && done){ celebrateGoal=false; celebrate(); }
 }
@@ -1739,7 +1828,11 @@ async function renderStreak(){
 /* one-shot confetti burst when today's goal is completed */
 function celebrate(){
   toast('Daily goal complete!');
-  if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;  // honor the OS setting — toast only, no confetti
+  confettiBurst();
+}
+/* the confetti itself — also fired on a rank-up (see revealTrophies) */
+function confettiBurst(){
+  if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;  // honor the OS setting — no confetti
   const cv=document.createElement('canvas'); cv.className='confetti';
   document.body.appendChild(cv);
   const dpr=window.devicePixelRatio||1, W=window.innerWidth, H=window.innerHeight;
@@ -1852,6 +1945,12 @@ async function renderHome(){
   const counts=dayCounts(sessions);
   if(reconcileFreezes(counts,progress,new Date(),DAILY_GOAL)>0)
     await Store.saveProgress(progress);
+  /* earn the cheap trophies (ranks/streak/gauntlet/volume/speed/secret — no full
+     problem scan) BEFORE drawing the rank row, so its trophy count + new-dot are
+     current on first paint. Mastery emblems are earned when the Mastery sheet or
+     the Trophy Case opens (those scan the grid). Toast comes after the renders. */
+  const freshTrophies=reconcileTrophies(progress,computeCheapStats(sessions,Date.now()),Date.now());
+  if(freshTrophies.length) Store.saveProgress(progress).catch(err=>console.error('trophy save failed',err));
   renderStreak().catch(err=>console.error('renderStreak failed',err));
   /* snapshot today's gauntlet set once per local day so retries race the same
      10; it recomputes tomorrow from your latest results */
@@ -1869,6 +1968,7 @@ async function renderHome(){
     gauntletToday={key:gkey,facts,parMs};
   }
   renderGauntlet();
+  if(freshTrophies.length) revealTrophies(freshTrophies);   // toast on top, after the renders
   renderBackupNudge(sessions);
 }
 
@@ -1950,6 +2050,246 @@ async function renderHistory(){
     if(s) openResults(s,await Store.getProblems(row.dataset.id));
   });
 })();
+
+/* ===================================================================
+   RANKS & TROPHIES — give XP a destination
+   Lifetime XP climbs a named RANK ladder; milestones across every system
+   (rank, streak, gauntlet medals, volume, speed records, mastery) earn
+   collectible EMBLEMS shown in the Trophy Case. A few are secret (hidden
+   until found). The pure ladder/catalog/earn logic lives in app-logic.js
+   (unit-tested); this is the paint + the cheap/full stat plumbing.
+   =================================================================== */
+const CHEV_SVG='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>';
+const CHECK_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
+/* monochrome line-icons (Feather-style) keyed by the catalog's `icon` name. */
+const TROPHY_ICON={
+  flame:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  bolt:'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  medal:'<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>',
+  layers:'<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/>',
+  trophy:'<path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4.5A1.5 1.5 0 0 0 3 7.5 3.5 3.5 0 0 0 6.5 11H7"/><path d="M17 6h2.5A1.5 1.5 0 0 1 21 7.5 3.5 3.5 0 0 1 17.5 11H17"/>',
+  sprout:'<path d="M12 22V12"/><path d="M12 12C12 8 9 6 5 6c0 4 3 6 7 6z"/><path d="M12 14c0-3.2 3-5 7-5 0 3.2-3 5-7 5z"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  star:'<polygon points="12 2.5 14.85 8.6 21.5 9.3 16.5 13.9 17.9 20.5 12 17 6.1 20.5 7.5 13.9 2.5 9.3 9.15 8.6"/>',
+  sparkle:'<path d="M12 3l1.9 5.6L19.5 10l-5.6 1.4L12 17l-1.9-5.6L4.5 10l5.6-1.4z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>',
+  moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+  shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
+  locked:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+};
+function icoSVG(name,size){
+  size=size||22;
+  const inner=TROPHY_ICON[name]||TROPHY_ICON.star;
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
+    'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+inner+'</svg>';
+}
+/* rank emblem — a regular polygon that GAINS a side per rank (Novice = triangle …
+   Luminary = hendecagon), so the insignia visibly sharpens as you climb; higher
+   ranks also gain a lit core. Generated, so it stays in lockstep with RANKS. */
+function rankPolyPoints(sides,cx,cy,r){
+  const out=[];
+  for(let i=0;i<sides;i++){
+    const a=-Math.PI/2 + i*2*Math.PI/sides;
+    out.push((cx+r*Math.cos(a)).toFixed(2)+','+(cy+r*Math.sin(a)).toFixed(2));
+  }
+  return out.join(' ');
+}
+function rankEmblemSVG(index,size){
+  size=size||28; index=Math.max(0,index||0);
+  const pts=rankPolyPoints(3+index,12,12,8.6);
+  const core=index>=3?'<circle cx="12" cy="12" r="'+(1+index*0.45).toFixed(2)+'" fill="currentColor" stroke="none" opacity="0.9"/>':'';
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
+    'stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><polygon points="'+pts+'"/>'+core+'</svg>';
+}
+function fmtNum(n){ return (Math.round(Number(n)||0)).toLocaleString('en-US'); }
+
+/* the trophy grid is grouped; ranks render as the hero+ladder, not as tiles. */
+const GROUP_META=[
+  {key:'streak',  name:'Streak'},
+  {key:'gauntlet',name:'Gauntlet'},
+  {key:'volume',  name:'Volume'},
+  {key:'records', name:'Records'},
+  {key:'mastery', name:'Mastery'},
+  {key:'secret',  name:'Secret'},
+];
+
+/* ---- stats bundles the trophy predicates read ----
+   computeCheapStats needs no problem scan (sessions + progress only), so it runs
+   on every renderHome; computeMasteryStats scans the grid and runs only when the
+   Mastery sheet or Trophy Case is open. Both feed the SAME monotonic reconcile. */
+function computeCheapStats(sessions,now){
+  const counts=dayCounts(sessions);
+  const fd=progress.freezeDays||{};
+  const cur=currentStreak(counts,fd,DAILY_GOAL,new Date(now));
+  const bestDay=Math.max(bestStreak(counts,fd,DAILY_GOAL),cur);
+  let bestScore=0, perfectGame=false, nightOwl=false;
+  for(const s of sessions){
+    const sc=s.score|0;
+    if(sc>bestScore) bestScore=sc;
+    if((s.errorCount|0)===0 && sc>=TROPHY.PERFECT_MIN) perfectGame=true;
+    const h=new Date(s.endedAt).getHours();
+    if(h>=0 && h<5) nightOwl=true;
+  }
+  const mc=medalCounts(progress.gauntletMedals);
+  const st=progress.stats||{probs:0,fastestMs:0};
+  return {
+    xpLifetime:progress.xpLifetime||0,
+    bestDayStreak:bestDay,
+    totalGames:sessions.length,
+    bestScore, perfectGame, nightOwl,
+    usedFreeze:Object.keys(progress.freezeDays||{}).length>0,
+    totalGauntlets:Object.keys(progress.gauntletClears||{}).length,
+    bestGauntletStreak:bestGauntletStreak(progress.gauntletClears),
+    golds:mc.gold, silvers:mc.silver, bronzes:mc.bronze,
+    totalProblems:st.probs||0, fastestCorrectMs:st.fastestMs||0,
+  };
+}
+function computeMasteryStats(problems,now){
+  if(!problems||!problems.length) return {strongFacts:0,seenFacts:0,opsWithStrong:0,tableMastered:false};
+  const baseline=masteryBaseline(problems);
+  let strong=0, seen=0, opsStrong=0, tableMastered=false;
+  for(const pair of MASTERY_OPS){
+    const g=masteryGrid(problems,pair[0],12,baseline);
+    let opStrong=0, reachable=0;
+    for(let a=1;a<=12;a++) for(let b=a;b<=12;b++){
+      reachable++;
+      const c=g.cells[a-1][b-1];
+      if(c) seen++;
+      if(masteryView(c,now).displayLevel===3){ strong++; opStrong++; }
+    }
+    if(opStrong>0) opsStrong++;
+    if(opStrong===reachable) tableMastered=true;
+  }
+  return {strongFacts:strong, seenFacts:seen, opsWithStrong:opsStrong, tableMastered};
+}
+/* lifetime problem count + fastest correct solve, from a full scan (one-time
+   backfill on upgrade, and the authoritative refresh when the case opens). */
+function scanProblemAgg(problems){
+  let probs=0, fastestMs=0;
+  for(const p of problems){
+    probs++;
+    if(p.wasCorrect && p.msToAnswer>0 && (!fastestMs||p.msToAnswer<fastestMs)) fastestMs=p.msToAnswer;
+  }
+  return {probs, fastestMs};
+}
+/* fold just-played problems into the running aggregate (cheap, no scan). */
+function bumpStats(probs){
+  progress.stats=progress.stats||{probs:0,fastestMs:0};
+  progress.stats.probs+=probs.length;
+  for(const p of probs){
+    if(p.wasCorrect && p.msToAnswer>0 && (!progress.stats.fastestMs||p.msToAnswer<progress.stats.fastestMs))
+      progress.stats.fastestMs=p.msToAnswer;
+  }
+}
+
+/* ---- reveals ---- */
+let _trophyStats=null;   // last full bundle computed for the open case (drives locked-tile progress)
+function revealTrophies(fresh){
+  if(!fresh||!fresh.length) return;
+  if(fresh.length>=4){ toast(fresh.length+' trophies unlocked — see your Trophy Case'); return; }
+  const rankT=fresh.find(t=>t.group==='rank');
+  if(rankT && fresh.length<=2) confettiBurst();   // a genuine rank-up, not a retro batch
+  if(fresh.length===1){
+    const t=fresh[0];
+    toast(t.group==='rank'?('New rank: '+t.name+'!'):('Trophy unlocked: '+t.name));
+  }else if(rankT){
+    toast('New rank: '+rankT.name+' · +'+(fresh.length-1)+' more');
+  }else{
+    toast(fresh.length+' trophies unlocked');
+  }
+}
+
+/* ---- the home rank row (built into the streak card foot) ---- */
+function rankRowHTML(){
+  const xpL=progress.xpLifetime||0, rk=rankForXp(xpL), counts=trophyCounts(progress);
+  const trophies=progress.trophies||{}, seenAt=progress.trophiesSeenAt||0;
+  let hasNew=false;
+  for(const k in trophies){ if(trophies[k]!=null && trophies[k]>seenAt){ hasNew=true; break; } }
+  const tally=counts.earned+'/'+counts.total+' trophies';
+  const sub=rk.isMax?('Max rank · '+tally):(fmtNum(rk.xpForNext)+' XP to '+escapeHTML(rk.next.name)+' · '+tally);
+  return '<button class="rank-row" id="btn-rank" aria-label="Open Trophy Case — rank '+escapeHTML(rk.rank.name)+'">'+
+    '<span class="rk-badge">'+rankEmblemSVG(rk.index,32)+'</span>'+
+    '<span class="rk-main">'+
+      '<span class="rk-top"><span class="rk-name">'+escapeHTML(rk.rank.name)+'</span>'+
+        (hasNew?'<span class="rk-new"></span>':'')+
+        '<span class="rk-xp"><b>'+fmtNum(progress.xp)+'</b> XP</span>'+
+        '<span class="rk-chev">'+CHEV_SVG+'</span></span>'+
+      '<span class="rk-bar"><span class="rk-fill" style="width:'+(rk.progress*100).toFixed(1)+'%"></span></span>'+
+      '<span class="rk-sub">'+sub+'</span>'+
+    '</span>'+
+  '</button>';
+}
+
+/* ---- the Trophy Case sheet ---- */
+function tileHTML(d,trophies,stats,prevSeen){
+  const earnedAt=trophies[d.id], earned=earnedAt!=null;
+  const isNew=earned && earnedAt>prevSeen;
+  const secretHidden=d.secret && !earned;
+  const ico=secretHidden?icoSVG('locked',22):icoSVG(d.icon,22);
+  const name=secretHidden?'?&#8201;?&#8201;?':escapeHTML(d.name);
+  let body;
+  if(earned || secretHidden || !d.progress){
+    body='<span class="tc-desc">'+(secretHidden?'Hidden — keep playing to reveal.':escapeHTML(d.desc))+'</span>';
+  }else{
+    const pr=d.progress(stats||{}), frac=pr.target>0?Math.max(0,Math.min(1,pr.cur/pr.target)):0;
+    body='<div class="tc-prog"><div class="tc-prog-bar"><span class="tc-prog-fill" style="width:'+(frac*100).toFixed(0)+'%"></span></div>'+
+      '<div class="tc-prog-txt">'+fmtNum(pr.cur)+' / '+fmtNum(pr.target)+'</div></div>';
+  }
+  const cls='tc-tile tg-'+d.group+(earned?' earned':' locked')+(secretHidden?' secret':'');
+  const corner=isNew?'<span class="tc-newbadge">NEW</span>':(earned?'<span class="tc-check">'+CHECK_SVG+'</span>':'');
+  return '<div class="'+cls+'">'+corner+'<span class="tc-ico">'+ico+'</span>'+
+    '<span class="tc-name">'+name+'</span>'+body+'</div>';
+}
+function renderTrophyCase(prevSeen){
+  prevSeen=prevSeen||0;
+  const xpL=progress.xpLifetime||0, rk=rankForXp(xpL), counts=trophyCounts(progress);
+  const trophies=progress.trophies||{}, stats=_trophyStats||{};
+  const heroSub=rk.isMax?('Top rank · '+fmtNum(xpL)+' lifetime XP'):(fmtNum(rk.xpForNext)+' XP to '+escapeHTML(rk.next.name));
+  let h='<div class="tc-hero"><span class="tc-hero-badge">'+rankEmblemSVG(rk.index,36)+'</span>'+
+    '<div class="tc-hero-main">'+
+      '<div class="tc-hero-rank">'+escapeHTML(rk.rank.name)+'</div>'+
+      '<div class="tc-hero-sub">Rank '+(rk.index+1)+' of '+RANKS.length+' &middot; '+heroSub+'</div>'+
+      '<div class="tc-hero-bar"><span class="tc-hero-fill" style="width:'+(rk.progress*100).toFixed(1)+'%"></span></div>'+
+      '<div class="tc-hero-count">'+counts.earned+' / '+counts.total+' trophies earned</div>'+
+    '</div></div>';
+  h+='<div class="tc-ladder">';
+  RANKS.forEach((r,i)=>{
+    const earned=xpL>=r.xp, current=i===rk.index;
+    const lab=current?'You':earned?'Earned':fmtNum(r.xp);
+    h+='<div class="tc-rung'+(current?' current':(earned?' earned':''))+'">'+
+      '<span>'+rankEmblemSVG(i,26)+'</span><span class="tc-rung-name">'+escapeHTML(r.name)+'</span>'+
+      '<span class="tc-rung-xp">'+lab+'</span></div>';
+  });
+  h+='</div>';
+  $('trophy-rank').innerHTML=h;
+  let gh='';
+  for(const gm of GROUP_META){
+    const defs=TROPHY_DEFS.filter(d=>d.group===gm.key);
+    if(!defs.length) continue;
+    const got=defs.filter(d=>trophies[d.id]!=null).length;
+    gh+='<div class="tc-group"><div class="tc-group-head"><span class="tc-group-name">'+gm.name+'</span>'+
+      '<span class="tc-group-count">'+got+' / '+defs.length+'</span></div>'+
+      '<div class="tc-grid">'+defs.map(d=>tileHTML(d,trophies,stats,prevSeen)).join('')+'</div></div>';
+  }
+  $('trophy-body').innerHTML=gh;
+}
+async function openTrophyCase(){
+  let sessions=[], problems=[];
+  try{ sessions=await Store.getSessions(); problems=await Store.getProblems(); }
+  catch(err){ console.error('trophy case: load failed',err); }
+  const now=Date.now(), prevSeen=progress.trophiesSeenAt||0;
+  const agg=scanProblemAgg(problems);                 // refresh the running aggregate authoritatively
+  const st=progress.stats||{probs:0,fastestMs:0};
+  progress.stats={probs:Math.max(st.probs||0,agg.probs),
+    fastestMs:[st.fastestMs||0,agg.fastestMs].filter(x=>x>0).sort((a,b)=>a-b)[0]||0};
+  _trophyStats=Object.assign(computeCheapStats(sessions,now),computeMasteryStats(problems,now));
+  reconcileTrophies(progress,_trophyStats,now);       // authoritative (includes mastery)
+  renderTrophyCase(prevSeen);
+  openSheet('sheet-trophies');
+  progress.trophiesSeenAt=now;                        // viewing the case clears the home new-dot
+  Store.saveProgress(progress).catch(err=>console.error('trophy case: save failed',err));
+  renderStreak().catch(err=>console.error('renderStreak failed',err));
+}
 
 /* ===================================================================
    THEME — two independent, persisted preferences:
@@ -2348,6 +2688,16 @@ async function renderMastery(){
        renderGrid(x.g,now);
   }
   body.innerHTML=h;
+  /* earn mastery emblems off the grids we just built (78 reachable cells per op) */
+  const fresh=reconcileTrophies(progress,{
+    strongFacts:tot.strong, seenFacts:tot.seen,
+    opsWithStrong:grids.filter(x=>x.t.strong>0).length,
+    tableMastered:grids.some(x=>x.t.strong===78),
+  },Date.now());
+  if(fresh.length){
+    Store.saveProgress(progress).catch(err=>console.error('trophy save failed',err));
+    revealTrophies(fresh);
+  }
 }
 
 /* ---------- mastery cell detail popover ----------
@@ -2653,8 +3003,11 @@ $('sheet-mastery').querySelector('.sheet-inner').addEventListener('scroll',hideC
 $('cell-pop').addEventListener('click',e=>{ if(e.target.closest('[data-cp-close]')) hideCellPop(); });
 window.addEventListener('resize',hideCellPop);
 $('btn-settings').addEventListener('click',()=>{ syncSettings(); openSheet('sheet-settings'); showSettingsTab('game'); });
-/* the buy-freeze button is re-created on every renderStreak — delegate */
-$('streak-card').addEventListener('click',e=>{ if(e.target.closest('#btn-buy-freeze')) onBuyFreeze(); });
+/* the buy-freeze button + rank row are re-created on every renderStreak — delegate */
+$('streak-card').addEventListener('click',e=>{
+  if(e.target.closest('#btn-buy-freeze')) onBuyFreeze();
+  else if(e.target.closest('#btn-rank')) openTrophyCase();
+});
 $('btn-csv').addEventListener('click',downloadCSV);
 $('btn-import').addEventListener('click',()=>$('csv-file').click());
 $('csv-file').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) importCSVFile(f); });
@@ -2746,6 +3099,13 @@ async function init(){
     const sp=await Store.getProgress();
     progress=normalizeProgress(sp);
     if(!sp) await Store.saveProgress(progress);
+    /* one-time backfill: a profile saved before trophies has no `stats` block, so
+       seed the running aggregate (problem count + fastest solve) from history once
+       — keeps retroactive Centurion/Quickdraw etc. accurate from the first launch */
+    else if(sp.stats==null){
+      try{ progress.stats=scanProblemAgg(await Store.getProblems()); await Store.saveProgress(progress); }
+      catch(err){ console.error('stats backfill failed',err); }
+    }
     backupState=(await Store.getBackupState())||backupState;
   }catch(err){
     console.error('Storage unavailable',err);

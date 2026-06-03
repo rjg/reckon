@@ -765,6 +765,143 @@ test('shouldBackupNudge fires only with unbacked games, past the stale window, n
   assert.equal(Z.shouldBackupNudge([game(now - DAY)], { lastBackupAt: 0, snoozeUntil: now + DAY }, now, STALE), false);
 });
 
+/* ===================== ranks ===================== */
+test('rankForXp places lifetime XP on the ladder with progress to the next rank', () => {
+  let r = Z.rankForXp(0);
+  assert.equal(r.rank.key, 'novice'); assert.equal(r.index, 0);
+  assert.equal(r.next.key, 'apprentice'); assert.equal(r.isMax, false);
+  assert.equal(r.xpForNext, 500); assert.equal(r.progress, 0);
+  assert.equal(Z.rankForXp(499).rank.key, 'novice');           // one short of the next rung
+  assert.equal(Z.rankForXp(499).xpForNext, 1);
+  r = Z.rankForXp(500);
+  assert.equal(r.rank.key, 'apprentice'); assert.equal(r.xpIntoRank, 0);
+  r = Z.rankForXp(2750);                                        // between adept(1500) and reckoner(4000)
+  assert.equal(r.rank.key, 'adept'); assert.equal(r.xpForNext, 1250); assert.equal(r.progress, 0.5);
+  r = Z.rankForXp(200000);                                      // past the top
+  assert.equal(r.rank.key, 'luminary'); assert.equal(r.isMax, true);
+  assert.equal(r.next, null); assert.equal(r.progress, 1); assert.equal(r.xpForNext, 0);
+  assert.equal(Z.rankForXp(-50).rank.key, 'novice');           // garbage floors to the base rank
+});
+
+/* ===================== best gauntlet streak ===================== */
+test('bestGauntletStreak finds the longest consecutive run of cleared days', () => {
+  const k = (y, m, d) => Z.dayKey(new Date(y, m - 1, d));
+  assert.equal(Z.bestGauntletStreak({ [k(2026,5,1)]:1, [k(2026,5,2)]:1, [k(2026,5,3)]:1,
+                                      [k(2026,5,10)]:1, [k(2026,5,11)]:1 }), 3);   // run of 3 vs run of 2
+  assert.equal(Z.bestGauntletStreak({ [k(2026,5,1)]:30000, [k(2026,5,3)]:30000 }), 1); // gap breaks it
+  assert.equal(Z.bestGauntletStreak({}), 0);
+  assert.equal(Z.bestGauntletStreak(null), 0);
+});
+
+/* ===================== trophy evaluation ===================== */
+test('evaluateTrophies earns nothing from an empty stats bundle', () => {
+  assert.deepEqual(Z.evaluateTrophies({}), []);          // every trophy needs a positive stat
+  assert.deepEqual(Z.evaluateTrophies(undefined), []);   // tolerant of no argument
+});
+
+test('evaluateTrophies earns the right emblems per system, with thresholds', () => {
+  const ids = stats => new Set(Z.evaluateTrophies(stats));
+  // ranks: lifetime XP unlocks each rung it has passed (Novice is the start, not a trophy)
+  let s = ids({ xpLifetime: 5000 });
+  assert.ok(s.has('rank-apprentice') && s.has('rank-adept') && s.has('rank-reckoner'));
+  assert.ok(!s.has('rank-tactician'));                    // 5000 < 9000
+  // day streak: 30 clears the 7 and 30 tiers but not 100
+  s = ids({ bestDayStreak: 30 });
+  assert.ok(s.has('streak-7') && s.has('streak-30') && !s.has('streak-100'));
+  // gauntlet medals / clears / streak
+  assert.ok(ids({ totalGauntlets: 1 }).has('gaunt-first'));
+  assert.ok(ids({ golds: 1 }).has('gaunt-gold') && !ids({ golds: 1 }).has('gaunt-gold10'));
+  assert.ok(ids({ golds: 10 }).has('gaunt-gold10'));
+  assert.ok(ids({ bestGauntletStreak: 7 }).has('gaunt-streak7'));
+  // volume
+  s = ids({ totalProblems: 1000 });
+  assert.ok(s.has('vol-100') && s.has('vol-1000') && !s.has('vol-10000'));
+  // speed: the guard rejects a 0 (no solves yet); 800ms is quickdraw only; 500ms is both
+  assert.deepEqual([...ids({ fastestCorrectMs: 0 })], []);
+  assert.ok(ids({ fastestCorrectMs: 800 }).has('rec-quickdraw') && !ids({ fastestCorrectMs: 800 }).has('rec-lightning'));
+  assert.ok(ids({ fastestCorrectMs: 500 }).has('rec-lightning'));
+  assert.ok(ids({ bestScore: 100 }).has('rec-highscore'));
+  // mastery
+  s = ids({ strongFacts: 100, tableMastered: true, opsWithStrong: 4 });
+  assert.ok(s.has('mas-25') && s.has('mas-100') && s.has('mas-table') && s.has('mas-allops'));
+  assert.ok(!ids({ opsWithStrong: 3 }).has('mas-allops'));
+  // secret
+  assert.ok(ids({ perfectGame: true }).has('sec-flawless'));
+  assert.ok(ids({ nightOwl: true }).has('sec-nightowl'));
+  assert.ok(ids({ usedFreeze: true }).has('sec-saved'));
+});
+
+test('every TROPHY_DEF is well-formed and secret trophies are flagged', () => {
+  const seen = new Set();
+  for (const t of Z.TROPHY_DEFS) {
+    assert.ok(t.id && !seen.has(t.id), 'unique id: ' + t.id); seen.add(t.id);
+    assert.equal(typeof t.reached, 'function');
+    assert.ok(t.name && t.desc && t.icon && t.group);
+  }
+  assert.equal(Z.TROPHY_TOTAL, Z.TROPHY_DEFS.length);
+  assert.ok(Z.TROPHY_DEFS.some(t => t.secret));            // some surprises exist
+  assert.ok(Z.TROPHY_DEFS.filter(t => t.group === 'rank').length === Z.RANKS.length - 1);
+});
+
+test('reconcileTrophies is monotonic: earns once, never un-earns, returns only the fresh', () => {
+  const p = Z.defaultProgress();
+  let fresh = Z.reconcileTrophies(p, { totalGauntlets: 1, golds: 1 }, 1000);
+  assert.deepEqual(fresh.map(t => t.id).sort(), ['gaunt-first', 'gaunt-gold']);
+  assert.equal(p.trophies['gaunt-first'], 1000);          // earn time stamped
+  // re-running with the same stats earns nothing new and doesn't restamp
+  fresh = Z.reconcileTrophies(p, { totalGauntlets: 1, golds: 1 }, 2000);
+  assert.deepEqual(fresh, []);
+  assert.equal(p.trophies['gaunt-first'], 1000);          // original timestamp preserved
+  // a REGRESSED stat (e.g. a mastered fact wilted away) must NOT remove an earned trophy
+  fresh = Z.reconcileTrophies(p, { golds: 0 }, 3000);
+  assert.deepEqual(fresh, []);
+  assert.ok(p.trophies['gaunt-gold'] != null);            // still earned
+  // a brand-new reach returns just that one
+  fresh = Z.reconcileTrophies(p, { golds: 10 }, 4000);
+  assert.deepEqual(fresh.map(t => t.id), ['gaunt-gold10']);
+  assert.equal(p.trophies['gaunt-gold10'], 4000);
+});
+
+test('trophyCounts reports earned-of-total, ignoring stale ids', () => {
+  const p = Z.defaultProgress();
+  assert.deepEqual(Z.trophyCounts(p), { earned: 0, total: Z.TROPHY_TOTAL });
+  Z.reconcileTrophies(p, { totalGauntlets: 1, bestScore: 100 }, 1);
+  assert.deepEqual(Z.trophyCounts(p), { earned: 2, total: Z.TROPHY_TOTAL });
+  p.trophies['no-such-trophy'] = 5;                       // an id from a future/older build is not counted
+  assert.equal(Z.trophyCounts(p).earned, 2);
+});
+
+/* ===================== progress carries the new fields ===================== */
+test('defaultProgress + normalize seed trophies / trophiesSeenAt / stats', () => {
+  const d = Z.defaultProgress();
+  assert.deepEqual(d.trophies, {});
+  assert.equal(d.trophiesSeenAt, 0);
+  assert.deepEqual(d.stats, { probs: 0, fastestMs: 0 });
+  assert.deepEqual(Z.normalizeProgress(null).stats, { probs: 0, fastestMs: 0 });
+  // trophiesSeenAt is a ms timestamp — it must survive normalize UNTRUNCATED (a |0 bug would wreck it)
+  const big = 1_750_000_000_000;
+  const n = Z.normalizeProgress({ trophiesSeenAt: big, trophies: { 'rank-adept': big }, stats: { probs: 9, fastestMs: 410 } });
+  assert.equal(n.trophiesSeenAt, big);
+  assert.equal(n.trophies['rank-adept'], big);
+  assert.deepEqual(n.stats, { probs: 9, fastestMs: 410 });
+  assert.deepEqual(Z.normalizeProgress({ trophies: 'bad', stats: 'bad' }).trophies, {});
+  assert.deepEqual(Z.normalizeProgress({ stats: 'bad' }).stats, { probs: 0, fastestMs: 0 });
+});
+
+test('mergeProgress unions trophies (earliest earn) and keeps the better stats', () => {
+  const cur = { trophies: { a: 100, b: 200 }, trophiesSeenAt: 500, stats: { probs: 300, fastestMs: 900 } };
+  const inc = { trophies: { a: 50, c: 300 }, trophiesSeenAt: 400, stats: { probs: 250, fastestMs: 700 } };
+  const m = Z.mergeProgress(cur, inc);
+  assert.deepEqual(m.trophies, { a: 50, b: 200, c: 300 });   // union; 'a' keeps the EARLIER (50)
+  assert.equal(m.trophiesSeenAt, 500);                       // max
+  assert.deepEqual(m.stats, { probs: 300, fastestMs: 700 }); // max problems, min (fastest) time
+  // a fresh profile adopts the incoming side; a 0 fastest (none yet) doesn't beat a real time
+  const fresh = Z.mergeProgress(null, { stats: { probs: 5, fastestMs: 0 }, trophies: { z: 9 } });
+  assert.equal(fresh.stats.probs, 5);
+  assert.equal(fresh.stats.fastestMs, 0);
+  assert.equal(fresh.trophies.z, 9);
+});
+
 /* ===================== html escaping ===================== */
 test('escapeHTML neutralizes the five HTML-significant characters', () => {
   assert.equal(Z.escapeHTML('a"b\'c&d<e>f'), 'a&quot;b&#39;c&amp;d&lt;e&gt;f');

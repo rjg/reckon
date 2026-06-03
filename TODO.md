@@ -37,14 +37,46 @@
     cellFreshness/masteryView live in app-logic.js + are unit-tested; the grid
     blends the colour with CSS color-mix (graceful fallback if unsupported).
 
-- [ ] How can I bring XP into this?  I think that's a really important
-  mechanic too but I don't totally knwo how to engage with it.  I kind of like
-  the idea of having trophies or shapes or whatever that I woudl unlock over
-  time.  I would have AI generate these (maybe use nanobanana if Opus can't do
-  it.  I could just have Opus give me the prompts).  But anyway, I could do that
-  and then have these images loaded into the app and I could unlock them.  I
-  would want them to be a surprise to me effectively. And I'd have some sort of
-  trophy case or something. 
+- [x] How can I bring XP into this?  I think that's a really important mechanic
+  too but I don't totally knwo how to engage with it.  I kind of like the idea
+  of having trophies or shapes or whatever that I woudl unlock over time.  I
+  could do that and then have these images loaded into the app and I could
+  unlock them.  I would want them to be a surprise to me effectively. And I'd
+  have some sort of trophy case or wall or something.
+  → DONE: **Ranks + a Trophy Case** (this is also IDEAS.md Direction #3 — the two
+    were the same wish, so they're built as one thing).
+    • **Ranks** — your *lifetime* XP (which was pure vanity) now climbs a 9-rung
+      ladder, Novice → … → Reckoner → … → Luminary. The home XP line became a
+      tappable **rank row**: rank name + a violet progress bar + "N XP to <next>"
+      + your trophy tally + spendable-XP. Each rank's insignia is a polygon that
+      gains a side as you climb (triangle → … → 11-gon), so it visibly sharpens.
+    • **Trophy Case** (tap the rank row) — the "wall." A rank hero + a scrollable
+      rank ladder, then a grid of collectible **emblems** (the "shapes," done as
+      our monochrome SVG line-icons, not raster images — scalable, themeable, no
+      deploy/404 risk) grouped by Streak · Gauntlet · Volume · Records · Mastery ·
+      Secret. Earned tiles light up in a per-group accent + a check; locked tiles
+      are quiet graphite with a live progress bar (e.g. "26 / 100").
+    • **Surprise** — the **Secret** group stays hidden ("???", a padlock) until
+      you trip it, and any freshly-earned emblem flashes a **NEW** badge with a
+      dot on the home rank row until you visit the case. A rank-up throws confetti.
+    • Emblems span everything you already do, so XP/play *pays out*: ranks, 7/30/
+      100-day streaks, first-gauntlet / gold / 10-golds / 7-day-gauntlet, 100/1k/
+      10k problems answered, sub-1s & sub-0.6s answers, 100-in-a-game, 25/100
+      strong facts, a fully-green table, all-four-ops, + secrets (flawless game,
+      midnight play, a freeze that saved your streak).  28 in all.
+    Decisions I made: rewards are **ranks + collectible emblems** (NOT new
+    palettes — Direction #3 floated palette-unlocks, but designing a whole new
+    palette's colours is a "show-me-options" call I didn't want to make while you
+    slept; teed up as a follow-up). Earned-state is **monotonic & persisted** —
+    once earned, never lost, even if a mastered fact later wilts. Perf: a cheap
+    reconcile (no full DB scan) runs on the home screen; the heavier mastery/
+    fastest-answer scan only runs when the Mastery sheet or the Case opens, so the
+    cold-launch path you optimised stays fast. Pure rankForXp / bestGauntletStreak
+    / TROPHY_DEFS / evaluateTrophies / reconcileTrophies live in app-logic.js with
+    11 new unit tests (71 pass). Verified end-to-end in headless Chrome across both
+    palettes × light/dark (earned / locked / progress / secret / reveal states).
+    Open choices for you: the rank **names** & XP **thresholds**, and the emblem
+    **shapes/wording** — all just data, easy to tweak; see the screenshots.
 
 - [x] I want to tweak the gauntlet.  I love the mode but it needs something
   else.  Liek why do I keep engaging with it?  How can I make use of those
