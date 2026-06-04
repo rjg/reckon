@@ -1936,7 +1936,9 @@ function closeCelebration(){
   _celebrateReturn=null;
 }
 /* the confetti itself — fired behind each celebration card, and standalone from
-   the Appearance self-test */
+   the Appearance self-test. Two bottom-corner cannons fire up-and-inward and a
+   centre pop fills the middle; pieces come as confetti, streamers and dots that
+   flutter down under air-drag, hold full colour, then fade over the last beat. */
 function confettiBurst(){
   if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;  // honor the OS setting — no confetti
   const cv=document.createElement('canvas'); cv.className='confetti';
@@ -1946,23 +1948,45 @@ function confettiBurst(){
   const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr);
   /* draw confetti from the live palette so it matches the active theme */
   const colors=['--ok','--cyan','--amber','--violet','--magenta'].map(v=>cssVar(v)||'#888');
+  const DUR=2600, rand=(a,b)=>a+Math.random()*(b-a);
+  /* scale the launch power with the screen so it clears tall and short phones alike */
+  const pow=Math.max(0.8,Math.min(1.5,H/700));
   const parts=[];
-  for(let i=0;i<130;i++) parts.push({
-    x:W/2+(Math.random()*2-1)*40, y:H*0.30,
-    vx:(Math.random()*2-1)*6, vy:(Math.random()*-1-3)*3.2,
-    g:0.18+Math.random()*0.1, rot:Math.random()*6.28, vr:(Math.random()*2-1)*0.3,
-    s:5+Math.random()*6, c:colors[i%colors.length],
-  });
+  /* two corner cannons aimed inward + a wide centre pop */
+  const emitters=[
+    {x:W*0.04, y:H*1.02, ang:-Math.PI*0.30, spread:0.42, n:75, spd:[13,21]},
+    {x:W*0.96, y:H*1.02, ang:-Math.PI*0.70, spread:0.42, n:75, spd:[13,21]},
+    {x:W*0.50, y:H*0.30, ang:-Math.PI*0.50, spread:1.10, n:55, spd:[6,12]},
+  ];
+  for(const e of emitters){
+    for(let i=0;i<e.n;i++){
+      const a=e.ang+rand(-e.spread,e.spread), sp=rand(e.spd[0],e.spd[1])*pow, kind=Math.random();
+      parts.push({
+        x:e.x, y:e.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
+        g:rand(0.22,0.34), drag:rand(0.984,0.994),
+        rot:rand(0,6.28), vr:rand(-0.34,0.34),
+        w:rand(6,11), h:kind<0.22?rand(12,22):rand(4,8),   // ~1 in 5 is a long streamer
+        round:kind>0.82,                                    // a few round dots
+        sway:rand(0.6,1.8), ph:rand(0,6.28),
+        c:colors[(Math.random()*colors.length)|0],
+      });
+    }
+  }
   const start=performance.now();
   (function frame(t){
-    const el=t-start; ctx.clearRect(0,0,W,H);
+    const el=t-start, p01=el/DUR;
+    ctx.clearRect(0,0,W,H);
+    ctx.globalAlpha=p01<0.7?1:Math.max(0,1-(p01-0.7)/0.3);   // hold full colour, fade the last 30%
     for(const p of parts){
-      p.vy+=p.g; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
-      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot);
-      ctx.globalAlpha=Math.max(0,1-el/1500); ctx.fillStyle=p.c;
-      ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*0.6); ctx.restore();
+      p.vx*=p.drag; p.vy=p.vy*p.drag+p.g;                    // air-drag + gravity → a soft flutter down
+      p.x+=p.vx+Math.sin(el/170*p.sway+p.ph)*0.7;            // drift side to side like falling paper
+      p.y+=p.vy; p.rot+=p.vr;
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.c;
+      if(p.round){ ctx.beginPath(); ctx.arc(0,0,p.w/2,0,6.2832); ctx.fill(); }
+      else ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+      ctx.restore();
     }
-    if(el<1500) requestAnimationFrame(frame); else cv.remove();
+    if(el<DUR) requestAnimationFrame(frame); else cv.remove();
   })(start);
 }
 
