@@ -363,6 +363,17 @@
     return rows;
   }
 
+  /* ---- accuracy: share of solves answered right on the first try ----
+     A problem counts as correct only when it was answered with no wrong
+     attempt first (wasCorrect). Returns the clean count, the total solved,
+     and a rounded percent; an empty game is 0/0 → 0%. */
+  function accuracy(problems) {
+    let correct = 0;
+    for (const p of problems) if (p.wasCorrect) correct++;
+    const total = problems.length;
+    return { correct, total, pct: total ? Math.round(correct / total * 100) : 0 };
+  }
+
   /* ---- challenge: rank your historically hardest facts ----
      Blend miss-rate and slowness (median solve vs your overall median) into one
      difficulty score. Robust to small samples: facts seen <2 times are skipped;
@@ -935,7 +946,7 @@
     pickGhost, ghostScoreAt, ghostMeter, timeRingState, GHOST_METER_RANGE,
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     cellFreshness, masteryView, MASTERY_FRESH_DAYS, MASTERY_STALE_DAYS,
-    opStats, computeWeakFacts,
+    opStats, accuracy, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
     gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_RANK, MEDAL_TIERS, MEDAL_XP,
     RANKS, rankForXp, bestGauntletStreak,

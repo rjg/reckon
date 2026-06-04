@@ -555,6 +555,9 @@
   /* results / stats tables */
   .res-score{font-family:var(--disp);font-size:34px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums;}
   .res-rate{font-size:13px;color:var(--muted);margin-bottom:6px;font-variant-numeric:tabular-nums;}
+  .res-acc{font-size:15px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .res-acc[hidden]{display:none;}
+  .res-acc .res-acc-pct{color:var(--signal-ink);}
   /* gauntlet results: the medal you earned, led with. Tier colour (a semantic
      metal) tints the icon, the puck behind it, and the label; sub stays muted.
      color-mix gives the soft puck; where unsupported the icon still reads. */
@@ -1049,6 +1052,7 @@
     <h1 class="logo">Reckon</h1>
     <div id="res-medal" class="res-medal-hero" hidden></div>
     <div class="res-score"><span id="res-score-label">Score: </span><span id="res-score">0</span></div>
+    <div class="res-acc" id="res-acc" hidden></div>
     <div class="res-rate"><span id="res-rate-label">Rate: </span><span id="res-rate">0</span></div>
     <div id="res-extra" hidden></div>
     <h3>By operation</h3>
@@ -1158,7 +1162,7 @@ const { dayKey, parseKey, addDays,
         dayCounts, currentStreak, bestStreak, reconcileFreezes,
         defaultProgress, normalizeProgress, xpForSession, awardXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt, ghostMeter, timeRingState,
-        masteryBaseline, masteryGrid, cellFreshness, masteryView, opStats, computeWeakFacts, genProblem, OP_ORDER,
+        masteryBaseline, masteryGrid, cellFreshness, masteryView, opStats, accuracy, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
         gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_XP,
         RANKS, rankForXp, bestGauntletStreak, TROPHY, TROPHY_DEFS, trophyCounts, reconcileTrophies,
@@ -1675,6 +1679,13 @@ function openResults(session,problems,extra){
   $('res-score').textContent=session.score;
   $('res-rate').textContent=fmtRate(session.rate);
 
+  /* correct answers + accuracy — computed from the problems (source of truth),
+     so it's right for replayed history games too, not just freshly played ones */
+  const acc=accuracy(problems);
+  $('res-acc').innerHTML=acc.correct+' / '+acc.total+' correct'+
+    ' <span class="res-acc-pct">'+acc.pct+'%</span>';
+  $('res-acc').hidden=!acc.total;
+
   /* post-game extras (XP earned, ghost outcome) — only on a freshly played
      game, not when reopening history from the Previous Games list */
   const ex=$('res-extra');
@@ -1729,6 +1740,7 @@ function openGauntletResults(probs,info){
   $('res-rate-label').textContent='';
   $('res-score').textContent=fmtS(ms);
   $('res-rate').textContent=(par>0?'Par '+fmtS(par)+' · ':'')+'your 10 weakest facts';
+  $('res-acc').hidden=true;   // gauntlet leads with the medal, not an accuracy line
 
   const best=info.best!=null?fmtS(info.best):'—';
   let xh='';
