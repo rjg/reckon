@@ -1005,6 +1005,13 @@
         <button data-theme-pref="dark">Dark</button>
       </div>
       <p class="hub-note">Auto follows your device&rsquo;s light/dark setting.</p>
+
+      <h3>Celebrations</h3>
+      <button class="csv-btn alt" id="btn-test-confetti">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>
+        </svg>Test celebration</button>
+      <p class="hub-note">Fires the confetti so you can check it shows on this device. It&rsquo;s hidden automatically when your device has <b>Reduce Motion</b> turned on.</p>
     </div>
 
     <!-- DATA -->
@@ -2384,6 +2391,17 @@ $('theme-seg').addEventListener('click',e=>{
 $('palette-seg').addEventListener('click',e=>{
   const b=e.target.closest('button[data-palette]'); if(!b) return;
   setPalettePref(b.dataset.palette);
+});
+/* a manual self-test for the celebration — handy to confirm it renders on a
+   given device, and to make the Reduce-Motion suppression visible (otherwise a
+   silent no-op looks like a bug). Close the sheet first so it plays full-screen. */
+$('btn-test-confetti').addEventListener('click',()=>{
+  closeSheets();
+  if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches){
+    toast('Confetti is off — Reduce Motion is on');
+    return;
+  }
+  setTimeout(confettiBurst,280);   // let the sheet finish sliding away first
 });
 
 /* ===================================================================
