@@ -2499,16 +2499,20 @@ $('palette-seg').addEventListener('click',e=>{
   const b=e.target.closest('button[data-palette]'); if(!b) return;
   setPalettePref(b.dataset.palette);
 });
-/* a manual self-test for the celebration — handy to confirm it renders on a
-   given device, and to make the Reduce-Motion suppression visible (otherwise a
-   silent no-op looks like a bug). Close the sheet first so it plays full-screen. */
+/* a manual self-test for the celebration — previews the real milestone modal
+   (with the confetti behind it) so you can see exactly what a win looks like on
+   this device. The card itself explains a Reduce-Motion no-confetti, since the
+   modal still shows in that case — only the confetti is suppressed. */
 $('btn-test-confetti').addEventListener('click',()=>{
   closeSheets();
-  if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches){
-    toast('Confetti is off — Reduce Motion is on');
-    return;
-  }
-  setTimeout(confettiBurst,280);   // let the sheet finish sliding away first
+  const reduced=window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  enqueueCelebration({
+    icon:'sparkle', kicker:'Preview', title:'Celebration test',
+    detail:reduced
+      ? 'This is how a milestone looks. The confetti is off because Reduce Motion is on.'
+      : 'This is how a milestone looks when you reach one.',
+  });
+  setTimeout(flushCelebrations,280);   // let the settings sheet finish sliding away first
 });
 
 /* ===================================================================
