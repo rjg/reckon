@@ -625,7 +625,35 @@
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
   /* goal celebration */
-  .confetti{position:fixed;inset:0;pointer-events:none;z-index:100;}
+  .confetti{position:fixed;inset:0;pointer-events:none;z-index:135;}
+
+  /* celebration modal — a centred milestone card, dismissed one at a time */
+  #celebrate{
+    position:fixed;inset:0;z-index:130;display:flex;align-items:center;justify-content:center;padding:24px;
+    background:rgb(var(--shadow-rgb) / .55);backdrop-filter:blur(3px);
+    opacity:0;visibility:hidden;transition:opacity .2s;
+  }
+  #celebrate.show{opacity:1;visibility:visible;}
+  .celebrate-card{
+    background:var(--raise);border:1px solid var(--line-2);border-radius:20px;
+    padding:28px 24px;max-width:340px;width:100%;text-align:center;
+    box-shadow:0 18px 50px rgb(var(--shadow-rgb) / .6);
+    transform:translateY(8px) scale(.98);transition:transform .2s;
+  }
+  #celebrate.show .celebrate-card{transform:none;}
+  .celebrate-emblem{
+    width:72px;height:72px;margin:0 auto 14px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--on-signal);background:var(--signal);box-shadow:0 8px 22px rgb(var(--shadow-rgb) / .4);
+  }
+  .celebrate-kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+  .celebrate-title{font-family:var(--disp);font-size:24px;font-weight:800;margin:4px 0 8px;color:var(--ink);}
+  .celebrate-detail{font-size:14px;color:var(--ink-dim);line-height:1.45;margin-bottom:20px;}
+  .celebrate-btn{
+    width:100%;padding:13px;border-radius:12px;background:var(--signal);color:var(--on-signal);
+    font-weight:700;font-size:15px;touch-action:manipulation;
+  }
+  .celebrate-btn:active{filter:brightness(1.06);}
 
   /* mastery grids */
   .m-grid{border-collapse:collapse;margin:4px 0 14px;width:100%;table-layout:fixed;}
@@ -920,6 +948,17 @@
 
 <!-- ============ BACKDROP + SHEETS ============ -->
 <div id="backdrop"></div>
+
+<!-- celebration modal — milestone moments, shown one card at a time -->
+<div id="celebrate" role="dialog" aria-modal="true" aria-labelledby="celebrate-title" hidden>
+  <div class="celebrate-card">
+    <div class="celebrate-emblem" id="celebrate-emblem" aria-hidden="true"></div>
+    <div class="celebrate-kicker" id="celebrate-kicker"></div>
+    <h2 class="celebrate-title" id="celebrate-title"></h2>
+    <p class="celebrate-detail" id="celebrate-detail"></p>
+    <button class="celebrate-btn" id="celebrate-next">Nice!</button>
+  </div>
+</div>
 
 <!-- settings sheet -->
 <div class="sheet" id="sheet-settings" role="dialog" aria-modal="true" aria-label="Settings" tabindex="-1">
@@ -1597,8 +1636,10 @@ async function endGame(){
   /* XP: 1 per solved problem (the score). awardXp only mutates progress in
      memory, so compute it up front — the results sheet shows it even if the
      persistence below fails. */
+  const rankBefore=rankForXp(progress.xpLifetime);   // snapshot to spot a rank-up
   const xpEarned=awardXp(progress,xpForSession(session));
   bumpStats(probs);   // running totals (problem count + fastest correct) for trophies
+  const rankAfter=rankForXp(progress.xpLifetime);
   const ghost=game.ghost
     ? {your:session.score, ghost:ghostScoreAt(game.ghost.rate,game.elapsedMs)} : null;
 
@@ -1606,12 +1647,22 @@ async function endGame(){
      txn) strand the player on the game screen — the UI recovery below always
      runs. */
   try{
+    const prevBest=(await Store.getSessions()).reduce((m,s)=>Math.max(m,s.score|0),0);  // before this game
     await Store.addSession(session);
     await Store.addProblems(probs);
     await Store.saveProgress(progress);
-    /* Arm the goal celebration when this game closes today's goal. */
     const todayCount=dayCounts(await Store.getSessions())[dayKey(new Date())]||0;
-    if(todayCount===DAILY_GOAL) celebrateGoal=true;
+    /* queue the milestone cards heaviest-first; renderHome appends any fresh
+       trophies after these, then opens the modal (one card at a time). */
+    if(rankAfter.index>rankBefore.index)
+      enqueueCelebration({icon:'star',kicker:'Rank up',title:rankAfter.rank.name,
+        detail:'You’ve climbed to a new rank.'});
+    if(prevBest>0 && (session.score|0)>prevBest)
+      enqueueCelebration({icon:'trophy',kicker:'Personal best',title:session.score+' solved',
+        detail:'Your best single game yet — past best was '+prevBest+'.'});
+    if(todayCount===DAILY_GOAL)
+      enqueueCelebration({icon:'flame',kicker:'Daily goal',title:'Goal complete',
+        detail:'That’s '+DAILY_GOAL+' games today — your streak is safe.'});
   }catch(err){
     console.error('endGame: failed to save session',err);
     toast('Could not save this game');
@@ -1644,12 +1695,21 @@ async function endGauntlet(){
   /* mutate progress in memory first (best time + best medal + medal-upgrade XP)
      so the results sheet is right even if the write below fails (quota / Private
      Browsing) */
+  const rankBefore=rankForXp(progress.xpLifetime);   // a medal upgrade can rank you up
   const res=recordGauntletClear(progress,game.gauntletDay,ms,medal);
   bumpStats(probs);   // gauntlet problems also count toward volume / fastest-answer trophies
+  const rankAfter=rankForXp(progress.xpLifetime);
   const streak=gauntletStreak(progress.gauntletClears,new Date());
   try{
     await Store.addProblems(probs);     // feeds the weak-fact loop + mastery (no session)
     await Store.saveProgress(progress);
+    /* queue milestone cards; renderHome appends fresh trophies, then shows them */
+    if(rankAfter.index>rankBefore.index)
+      enqueueCelebration({icon:'star',kicker:'Rank up',title:rankAfter.rank.name,
+        detail:'You’ve climbed to a new rank.'});
+    if(res.improved && !res.firstToday)
+      enqueueCelebration({icon:'bolt',kicker:'Personal best',title:'New gauntlet time',
+        detail:'Cleared today’s set in '+fmtSec(res.best)+' — your fastest yet.'});
   }catch(err){
     console.error('endGauntlet: save failed',err);
     toast('Could not save this gauntlet');
@@ -1774,10 +1834,8 @@ const GHOST_SVG='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" str
 /* dayKey / parseKey / addDays / dayCounts / currentStreak / bestStreak /
    reconcileFreezes all live in app-logic.js (shared with the test suite). */
 
-/* gamification state, hydrated in init(); celebrateGoal is armed by endGame()
-   when a game closes today's goal, then fired by the next renderStreak() */
+/* gamification state, hydrated in init() */
 let progress=defaultProgress();
-let celebrateGoal=false;
 
 /* SVG progress ring for today's goal */
 function goalRing(count,goal){
@@ -1845,16 +1903,40 @@ async function renderStreak(){
       '</div>'+
     '</div>'+
     rankRowHTML();
-
-  if(celebrateGoal && done){ celebrateGoal=false; celebrate(); }
 }
 
-/* one-shot confetti burst when today's goal is completed */
-function celebrate(){
-  toast('Daily goal complete!');
+/* ---- celebration queue ----
+   Milestone moments — a rank-up, a personal best, the daily goal, a fresh
+   trophy — are pushed here from wherever they're detected and shown as one
+   centred card at a time. Each needs a tap to move on, so a win gets a beat of
+   attention instead of a fleeting toast. The confetti rains behind every card. */
+let _celebrateQueue=[], _celebrateOpen=false, _celebrateReturn=null;
+function enqueueCelebration(item){ if(item && item.title) _celebrateQueue.push(item); }
+/* open the modal if anything is queued and it isn't already showing */
+function flushCelebrations(){ if(!_celebrateOpen) showNextCelebration(); }
+function showNextCelebration(){
+  const item=_celebrateQueue.shift();
+  if(!item){ closeCelebration(); return; }
+  if(!_celebrateOpen) _celebrateReturn=document.activeElement;   // restore focus when the run ends
+  _celebrateOpen=true;
+  $('celebrate-emblem').innerHTML=icoSVG(item.icon||'star',34);
+  $('celebrate-kicker').textContent=item.kicker||'Achievement';
+  $('celebrate-title').textContent=item.title;
+  const d=$('celebrate-detail'); d.textContent=item.detail||''; d.hidden=!item.detail;
+  $('celebrate-next').textContent=_celebrateQueue.length?'Next':'Nice!';
+  const ov=$('celebrate'); ov.hidden=false;
+  requestAnimationFrame(()=>ov.classList.add('show'));
   confettiBurst();
+  $('celebrate-next').focus();
 }
-/* the confetti itself — also fired on a rank-up (see revealTrophies) */
+function advanceCelebration(){ if(_celebrateOpen) showNextCelebration(); }
+function closeCelebration(){
+  const ov=$('celebrate'); ov.classList.remove('show'); ov.hidden=true; _celebrateOpen=false;
+  if(_celebrateReturn && _celebrateReturn.focus){ try{ _celebrateReturn.focus(); }catch(e){} }
+  _celebrateReturn=null;
+}
+/* the confetti itself — fired behind each celebration card, and standalone from
+   the Appearance self-test */
 function confettiBurst(){
   if(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;  // honor the OS setting — no confetti
   const cv=document.createElement('canvas'); cv.className='confetti';
@@ -1992,7 +2074,8 @@ async function renderHome(){
     gauntletToday={key:gkey,facts,parMs};
   }
   renderGauntlet();
-  if(freshTrophies.length) revealTrophies(freshTrophies);   // toast on top, after the renders
+  if(freshTrophies.length) revealTrophies(freshTrophies);   // queue trophy cards, after the renders
+  flushCelebrations();   // pop any queued milestone cards (rank/PB/goal/trophy)
   renderBackupNudge(sessions);
 }
 
@@ -2210,16 +2293,16 @@ function bumpStats(probs){
 let _trophyStats=null;   // last full bundle computed for the open case (drives locked-tile progress)
 function revealTrophies(fresh){
   if(!fresh||!fresh.length) return;
+  /* a big batch is the one-time retro backfill (first run / after an import) — a
+     single toast, never a wall of modal cards. */
   if(fresh.length>=4){ toast(fresh.length+' trophies unlocked — see your Trophy Case'); return; }
-  const rankT=fresh.find(t=>t.group==='rank');
-  if(rankT && fresh.length<=2) confettiBurst();   // a genuine rank-up, not a retro batch
-  if(fresh.length===1){
-    const t=fresh[0];
-    toast(t.group==='rank'?('New rank: '+t.name+'!'):('Trophy unlocked: '+t.name));
-  }else if(rankT){
-    toast('New rank: '+rankT.name+' · +'+(fresh.length-1)+' more');
-  }else{
-    toast(fresh.length+' trophies unlocked');
+  for(const t of fresh){
+    if(t.group==='rank') continue;   // rank-ups get their own card from the game-end flow
+    enqueueCelebration({
+      icon:t.icon,
+      kicker:t.group==='secret'?'Secret trophy':'Trophy unlocked',
+      title:t.name, detail:t.desc,
+    });
   }
 }
 
@@ -2732,6 +2815,7 @@ async function renderMastery(){
   if(fresh.length){
     Store.saveProgress(progress).catch(err=>console.error('trophy save failed',err));
     revealTrophies(fresh);
+    flushCelebrations();   // mastery emblems earned by opening the grid pop here
   }
 }
 
@@ -3099,7 +3183,15 @@ $('res-toggle').addEventListener('click',()=>{
 });
 $('backdrop').addEventListener('click',closeSheets);
 document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',closeSheets));
+$('celebrate-next').addEventListener('click',advanceCelebration);
 document.addEventListener('keydown',e=>{
+  /* the celebration modal owns the keyboard while open: it must be dismissed,
+     so Esc/Enter/Space advance it and Tab stays on its button (no closeSheets). */
+  if(_celebrateOpen){
+    if(e.key==='Escape'||e.key==='Enter'||e.key===' '){ e.preventDefault(); advanceCelebration(); }
+    else if(e.key==='Tab'){ e.preventDefault(); $('celebrate-next').focus(); }
+    return;
+  }
   if(e.key==='Escape'){ if(selectedCell) hideCellPop(); else closeSheets(); return; }
   if(e.key==='Tab') trapTab(e);
 });
