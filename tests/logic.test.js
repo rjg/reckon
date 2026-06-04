@@ -315,6 +315,24 @@ test('opStats on no problems is an empty list', () => {
   assert.deepEqual(Z.opStats([]), []);
 });
 
+/* ===================== accuracy ===================== */
+test('accuracy counts first-try solves and rounds the percent', () => {
+  const problems = [
+    { wasCorrect: true }, { wasCorrect: true }, { wasCorrect: true },
+    { wasCorrect: false },   // solved, but only after a wrong attempt
+  ];
+  assert.deepEqual(Z.accuracy(problems), { correct: 3, total: 4, pct: 75 });
+});
+
+test('accuracy on no problems is 0/0 → 0% (no divide-by-zero)', () => {
+  assert.deepEqual(Z.accuracy([]), { correct: 0, total: 0, pct: 0 });
+});
+
+test('accuracy is 100% when every solve was clean', () => {
+  const problems = [{ wasCorrect: true }, { wasCorrect: true }];
+  assert.deepEqual(Z.accuracy(problems), { correct: 2, total: 2, pct: 100 });
+});
+
 /* ===================== computeWeakFacts ===================== */
 test('computeWeakFacts ranks misses and slow facts above fast/accurate ones', () => {
   const fact = (op, o1, o2, ok, ms) =>
