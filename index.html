@@ -258,22 +258,6 @@
   @keyframes caret{0%,50%{opacity:1;}51%,100%{opacity:0;}}
   .home-title{margin-bottom:18px;}
 
-  .home-actions{display:flex;gap:12px;padding:0 16px 16px;}
-  .big-btn{
-    flex:1;padding:18px 8px;border-radius:var(--r);font-size:18px;font-weight:700;
-    font-family:var(--disp);letter-spacing:.2px;touch-action:manipulation;
-    transition:transform .1s,filter .15s;
-  }
-  .big-btn.blue{   /* primary "GO" — signal fill, dark ink (matches the in-game timer) */
-    background:var(--signal);color:var(--on-signal);
-    box-shadow:0 0 0 1px rgb(var(--signal-rgb) / .5),0 10px 30px -8px rgb(var(--signal-rgb) / .45),
-               inset 0 1px 0 var(--btn-hi);
-  }
-  .big-btn.purple{background:var(--magenta);color:var(--on-magenta);}
-  .big-btn.orange{background:var(--amber);color:var(--on-amber);}
-  .big-btn:active{transform:scale(.985);filter:brightness(1.06);}
-  .home-actions.stack{padding-top:0;}
-
   /* ---------- streak ---------- */
   .streak-card{
     position:relative;margin:0 16px 14px;padding:15px 16px 16px;
