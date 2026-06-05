@@ -796,6 +796,9 @@
     color:var(--violet-ink);background:rgb(var(--violet-rgb) / .14);box-shadow:inset 0 0 0 1.5px rgb(var(--violet-rgb) / .4);}
   .tc-hero-main{flex:1;min-width:0;}
   .tc-hero-rank{font-family:var(--disp);font-size:25px;font-weight:800;letter-spacing:-.3px;line-height:1.04;}
+  .tc-hero-xp{font-family:var(--disp);font-size:13px;font-weight:700;color:var(--violet-ink);margin-top:4px;
+    font-variant-numeric:tabular-nums;letter-spacing:.02em;}
+  .tc-hero-xp b{font-size:20px;font-weight:800;letter-spacing:-.3px;}
   .tc-hero-sub{font-size:12px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;}
   .tc-hero-bar{position:relative;height:8px;border-radius:5px;background:var(--panel);border:1px solid var(--line);overflow:hidden;margin-top:10px;}
   .tc-hero-fill{position:absolute;top:0;bottom:0;left:0;border-radius:5px;background:var(--violet);box-shadow:0 0 10px rgb(var(--violet-rgb) / .5);}
@@ -2337,11 +2340,7 @@ function rankRowHTML(){
   let hasNew=false;
   for(const k in trophies){ if(trophies[k]!=null && trophies[k]>seenAt){ hasNew=true; break; } }
   const tally=counts.earned+'/'+counts.total+' trophies';
-  /* the rank row is the lifetime widget, so lead the sub-line with the lifetime
-     XP total (distinct from the spendable wallet shown top-right), then progress
-     to the next rank and the trophy tally */
-  const toNext=rk.isMax?'Max rank':(fmtNum(rk.xpForNext)+' to '+escapeHTML(rk.next.name));
-  const sub=fmtNum(xpL)+' lifetime · '+toNext+' · '+tally;
+  const sub=rk.isMax?('Max rank · '+tally):(fmtNum(rk.xpForNext)+' XP to '+escapeHTML(rk.next.name)+' · '+tally);
   return '<button class="rank-row" id="btn-rank" aria-label="Open Trophy Case — rank '+escapeHTML(rk.rank.name)+'">'+
     '<span class="rk-badge">'+rankEmblemSVG(rk.index,32)+'</span>'+
     '<span class="rk-main">'+
@@ -2379,10 +2378,11 @@ function renderTrophyCase(prevSeen){
   prevSeen=prevSeen||0;
   const xpL=progress.xpLifetime||0, rk=rankForXp(xpL), counts=trophyCounts(progress);
   const trophies=progress.trophies||{}, stats=_trophyStats||{};
-  const heroSub=rk.isMax?('Top rank · '+fmtNum(xpL)+' lifetime XP'):(fmtNum(rk.xpForNext)+' XP to '+escapeHTML(rk.next.name));
+  const heroSub=rk.isMax?'Top rank':(fmtNum(rk.xpForNext)+' XP to '+escapeHTML(rk.next.name));
   let h='<div class="tc-hero"><span class="tc-hero-badge">'+rankEmblemSVG(rk.index,36)+'</span>'+
     '<div class="tc-hero-main">'+
       '<div class="tc-hero-rank">'+escapeHTML(rk.rank.name)+'</div>'+
+      '<div class="tc-hero-xp"><b>'+fmtNum(xpL)+'</b> lifetime XP</div>'+
       '<div class="tc-hero-sub">Rank '+(rk.index+1)+' of '+RANKS.length+' &middot; '+heroSub+'</div>'+
       '<div class="tc-hero-bar"><span class="tc-hero-fill" style="width:'+(rk.progress*100).toFixed(1)+'%"></span></div>'+
       '<div class="tc-hero-count">'+counts.earned+' / '+counts.total+' trophies earned</div>'+
