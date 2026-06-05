@@ -929,3 +929,48 @@ test('escapeHTML neutralizes the five HTML-significant characters', () => {
   const out = Z.escapeHTML('"><img src=x onerror=alert(1)>');
   assert.ok(!out.includes('<') && !out.includes('>') && !out.includes('"'), 'no raw < > " survive');
 });
+
+/* ===================== survival / sudden death ===================== */
+test('survivalTimeLimit starts generous, tightens per solve, and floors', () => {
+  assert.equal(Z.survivalTimeLimit(0), Z.SURVIVAL_START_MS);            // first problem
+  assert.equal(Z.survivalTimeLimit(1), Z.SURVIVAL_START_MS - Z.SURVIVAL_STEP_MS);
+  // monotonically non-increasing
+  for (let i = 1; i <= 40; i++)
+    assert.ok(Z.survivalTimeLimit(i) <= Z.survivalTimeLimit(i - 1));
+  // never drops below the floor, even far out
+  assert.equal(Z.survivalTimeLimit(1000), Z.SURVIVAL_FLOOR_MS);
+  assert.ok(Z.survivalTimeLimit(0) > Z.SURVIVAL_FLOOR_MS);
+  // negative / garbage solved counts clamp to the start budget
+  assert.equal(Z.survivalTimeLimit(-5), Z.SURVIVAL_START_MS);
+});
+
+test('recordSurvival banks only a new best (monotonic) and reports it', () => {
+  const p = Z.defaultProgress();
+  assert.equal(p.survivalBest, 0);
+  let r = Z.recordSurvival(p, 7);
+  assert.deepEqual(r, { best: 7, isBest: true, prev: 0 });
+  assert.equal(p.survivalBest, 7);
+  r = Z.recordSurvival(p, 4);                 // worse run doesn't lower the best
+  assert.deepEqual(r, { best: 7, isBest: false, prev: 7 });
+  assert.equal(p.survivalBest, 7);
+  r = Z.recordSurvival(p, 7);                 // tying is not a new best
+  assert.equal(r.isBest, false);
+  r = Z.recordSurvival(p, 12);                // beating it is
+  assert.deepEqual(r, { best: 12, isBest: true, prev: 7 });
+  assert.equal(p.survivalBest, 12);
+});
+
+test('survivalBest survives normalize and takes the max on merge', () => {
+  assert.equal(Z.normalizeProgress({ survivalBest: 9 }).survivalBest, 9);
+  assert.equal(Z.normalizeProgress({ survivalBest: -3 }).survivalBest, 0);  // clamp garbage
+  assert.equal(Z.normalizeProgress({}).survivalBest, 0);
+  const m = Z.mergeProgress({ survivalBest: 5 }, { survivalBest: 11 });
+  assert.equal(m.survivalBest, 11);
+});
+
+test('Survivor trophy is earned at the survival threshold', () => {
+  const below = Z.evaluateTrophies({ bestSurvival: Z.TROPHY.SURVIVAL - 1 });
+  const at = Z.evaluateTrophies({ bestSurvival: Z.TROPHY.SURVIVAL });
+  assert.ok(!below.includes('rec-survival'));
+  assert.ok(at.includes('rec-survival'));
+});

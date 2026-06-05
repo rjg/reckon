@@ -764,6 +764,42 @@
   .gc-medals .gm.bronze{color:var(--medal-bronze);}
   .gc-medals .gm .n{font-size:13px;color:var(--ink-dim);}
 
+  /* ---------- survival / sudden-death card ----------
+     Mirrors the gauntlet card's anatomy but in the magenta "records" identity
+     (survival's only spoil is a personal best), so it reads as a sibling launch
+     surface, not a clone of the gauntlet. */
+  .surv-card{
+    margin:0 16px 18px;padding:16px 17px 15px;border-radius:18px;color:var(--ink);
+    background:
+      radial-gradient(130% 85% at 100% -12%, rgb(var(--magenta-rgb) / .13), transparent 56%),
+      var(--panel);
+    border:1px solid rgb(var(--magenta-rgb) / .22);
+    box-shadow:0 12px 30px -16px rgb(var(--magenta-rgb) / .35);position:relative;overflow:hidden;
+  }
+  .surv-card::after{content:"";position:absolute;right:-50px;top:-70px;width:200px;height:200px;
+    pointer-events:none;border-radius:50%;
+    background:
+      repeating-linear-gradient(45deg,rgb(var(--magenta-rgb) / .06) 0 7px,transparent 7px 14px),
+      radial-gradient(circle,rgb(var(--magenta-rgb) / .14),transparent 70%);}
+  .sv-head{display:flex;align-items:center;gap:8px;position:relative;}
+  .sv-skull{display:inline-flex;color:var(--magenta-ink);filter:drop-shadow(0 0 6px rgb(var(--magenta-rgb) / .6));}
+  .sv-kicker{font-size:11px;font-weight:700;letter-spacing:.16em;color:var(--magenta-ink);}
+  .sv-tag{margin-left:auto;font-size:10px;font-weight:700;letter-spacing:.08em;
+    background:var(--panel-2);border:1px solid var(--line-2);color:var(--muted);
+    padding:4px 9px;border-radius:8px;text-transform:uppercase;}
+  .sv-best{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;
+    letter-spacing:.06em;color:var(--magenta-ink);background:rgb(var(--magenta-rgb) / .14);
+    border:1px solid rgb(var(--magenta-rgb) / .3);padding:4px 9px;border-radius:8px;
+    font-variant-numeric:tabular-nums;}
+  .sv-title{font-family:var(--disp);font-size:22px;font-weight:800;margin:11px 0 1px;position:relative;letter-spacing:-.3px;color:var(--ink);}
+  .sv-blurb{font-size:12.5px;color:var(--muted);position:relative;line-height:1.45;}
+  .sv-cta{margin-top:14px;width:100%;padding:14px;border-radius:12px;position:relative;
+    background:var(--magenta);color:var(--on-magenta);font-family:var(--disp);font-weight:800;font-size:16px;
+    display:flex;align-items:center;justify-content:center;gap:7px;touch-action:manipulation;
+    box-shadow:0 8px 24px -12px rgb(var(--magenta-rgb) / .6);}
+  .sv-cta:active{filter:brightness(1.06);}
+  .sv-foot{margin-top:13px;font-size:12.5px;color:var(--muted);position:relative;}
+
   /* ---------- rank row (foot of the streak card → opens the Trophy Case) ----------
      XP used to be a dead-end readout; now the lifetime total drives a named RANK
      and the row is the doorway to the case. Violet is the rank/XP/trophy identity
@@ -856,6 +892,7 @@
   #screen-home.active .streak-card,
   #screen-home.active .home-actions,
   #screen-home.active .gaunt-card,
+  #screen-home.active .surv-card,
   #screen-home.active .backup-nudge:not([hidden]){
     animation:rise .5s both cubic-bezier(.2,.7,.2,1);
   }
@@ -863,6 +900,7 @@
   #screen-home.active .streak-card{animation-delay:.08s;}
   #screen-home.active .home-actions{animation-delay:.14s;}
   #screen-home.active .gaunt-card{animation-delay:.2s;}
+  #screen-home.active .surv-card{animation-delay:.26s;}
   @media (prefers-reduced-motion:reduce){
     *{animation:none!important;}
   }
@@ -921,6 +959,7 @@
   </div>
   <div class="backup-nudge" id="backup-nudge" hidden></div>
   <div class="gaunt-card" id="gaunt-card"></div>
+  <div class="surv-card" id="surv-card"></div>
 </div>
 
 <!-- ============ GAME ============ -->
@@ -1213,6 +1252,7 @@ const { dayKey, parseKey, addDays,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt, ghostMeter, timeRingState,
         masteryBaseline, masteryGrid, cellFreshness, masteryView, opStats, accuracy, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
+        survivalTimeLimit, recordSurvival,
         gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_XP,
         RANKS, rankForXp, bestGauntletStreak, TROPHY, TROPHY_DEFS, trophyCounts, reconcileTrophies,
         parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
@@ -1561,6 +1601,13 @@ function tick(){
     setTimeRing(game.idx/game.facts.length,'ok',(elapsed/1000).toFixed(1)+'s');
     return;
   }
+  if(game.mode==='survival'){               // per-problem clock drains; centre = streak so far
+    const remaining=game.deadline-performance.now();
+    const st=timeRingState(remaining,game.limitMs);
+    setTimeRing(st.frac,st.level,String(game.solved));
+    if(remaining<=0){ endSurvival('timeout').catch(err=>console.error('endSurvival failed',err)); }
+    return;
+  }
   const remaining=game.durationMs-elapsed;
   const st=timeRingState(remaining,game.durationMs);
   setTimeRing(st.frac,st.level,String(Math.max(0,Math.ceil(remaining/1000))));
@@ -1578,6 +1625,12 @@ function onAnswerInput(){
   if(num===correct){
     commitProblem(); advance();
   }else if(v.length>=String(correct).length){
+    if(game.mode==='survival'){
+      /* sudden death: a complete, wrong entry ends the run (logged as the miss) */
+      game.wrongAnswer=num; commitProblem();
+      endSurvival('wrong').catch(err=>console.error('endSurvival failed',err));
+      return;
+    }
     /* a complete-looking but wrong entry — logged silently for the diagnostic */
     if(game.wrongAnswer===null) game.wrongAnswer=num;
   }
@@ -1608,6 +1661,17 @@ function advance(){
     $('answer').value='';
     $('game-problem').textContent=game.current.display;
     setTimeRing(game.idx/game.facts.length,'ok',((performance.now()-game.startTime)/1000).toFixed(1)+'s');
+    return;
+  }
+  if(game.mode==='survival'){
+    game.solved++;                          // a clean solve — the streak grows, the clock tightens
+    game.current=nextFromQueue(game.config);
+    game.problemStart=performance.now();
+    game.limitMs=survivalTimeLimit(game.solved);
+    game.deadline=game.problemStart+game.limitMs;
+    $('answer').value='';
+    $('game-problem').textContent=game.current.display;
+    setTimeRing(1,'ok',String(game.solved));
     return;
   }
   game.current=nextFromQueue(game.config);
@@ -1722,6 +1786,99 @@ async function endGauntlet(){
   await renderHome().catch(err=>console.error('endGauntlet: renderHome failed',err));
   openGauntletResults(probs,{ms,par,medal,streak,reward:res.reward,best:res.best,
     firstToday:res.firstToday,improved:res.improved,medalImproved:res.medalImproved,prevMedal:res.prevMedal});
+}
+
+/* ---------- survival / sudden death ----------
+   No overall timer: every problem has its own shrinking clock (survivalTimeLimit),
+   and the FIRST miss — a wrong answer or the clock running out — ends the run.
+   Score = how many you solved in a row. Like the gauntlet it logs problems (so
+   the practice feeds weak facts + mastery) but no session, so it stays out of the
+   daily goal, stats chart and bests. The only thing it banks is the lifetime best
+   streak (progress.survivalBest) and 1 XP per solve. */
+const SKULL_SVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.3 4.4 3 5.5V19a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2.5c1.7-1.1 3-2.9 3-5.5a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.2" r="1.4"/><circle cx="15" cy="11.2" r="1.4"/><path d="M10.2 20v-2.2M13.8 20v-2.2"/></svg>';
+const SKULL_SVG_SM='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.3 4.4 3 5.5V19a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2.5c1.7-1.1 3-2.9 3-5.5a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.2" r="1.4"/><circle cx="15" cy="11.2" r="1.4"/><path d="M10.2 20v-2.2M13.8 20v-2.2"/></svg>';
+/* a steady, all-ops mix in a comparable difficulty band (times tables for ×/÷, a
+   moderate range for +/−) so the escalation comes from the tightening clock, not
+   from wildly swingy problems — keeps "how high can you climb" a fair contest. */
+const SURVIVAL_CONFIG={presetName:'Survival',durationSec:0,
+  ops:{add:true,sub:true,mul:true,div:true},add:R(2,50,2,50),mul:R(2,12,2,12)};
+
+function startSurvival(){ beginSurvival(); }
+
+function beginSurvival(){
+  const cfg=clone(SURVIVAL_CONFIG);
+  game={
+    sessionId:uuid(), mode:'survival', config:cfg,
+    problems:[], wrongAnswer:null, ended:false, solved:0,
+    startedAtISO:new Date().toISOString(), ghost:null,
+  };
+  queue=[]; fillQueue(cfg);
+  game.startTime=performance.now();
+  game.current=nextFromQueue(cfg);
+  game.problemStart=game.startTime;
+  game.limitMs=survivalTimeLimit(0);
+  game.deadline=game.problemStart+game.limitMs;
+  $('game-problem').textContent=game.current.display;
+  $('time-ring').classList.remove('gaunt');
+  setTimeRing(1,'ok','0');                    // ring drains per problem; centre = streak so far
+  $('ghost-meter').hidden=true;
+  $('answer').value='';
+  showScreen('game');
+  $('answer').focus();   /* bring up the native iOS numeric keyboard */
+  game.timer=setInterval(tick,100);
+}
+
+async function endSurvival(cause){
+  if(!game||game.ended) return;
+  game.ended=true;
+  clearInterval(game.timer);
+  const probs=game.problems;
+  const streak=game.solved;                   // problems cleared before the miss
+  /* bank the best + XP in memory first so the results sheet is right even if the
+     write below fails (quota / Private Browsing) */
+  const rankBefore=rankForXp(progress.xpLifetime);   // survival XP can rank you up
+  const res=recordSurvival(progress,streak);
+  const xpEarned=awardXp(progress,streak);    // 1 XP per solve, like a normal game
+  bumpStats(probs);                           // volume / fastest-answer trophies
+  const rankAfter=rankForXp(progress.xpLifetime);
+  try{
+    await Store.addProblems(probs);           // feed weak facts + mastery (no session)
+    await Store.saveProgress(progress);
+    /* queue milestone cards; renderHome appends fresh trophies, then shows them */
+    if(rankAfter.index>rankBefore.index)
+      enqueueCelebration({icon:'star',kicker:'Rank up',title:rankAfter.rank.name,
+        detail:'You’ve climbed to a new rank.'});
+    if(res.isBest && streak>0)
+      enqueueCelebration({icon:'skull',kicker:'Personal best',title:streak+' in a row',
+        detail:'Your longest survival streak yet'+(res.prev>0?' — past best was '+res.prev+'.':'.')});
+  }catch(err){
+    console.error('endSurvival: save failed',err);
+    toast('Could not save this run');
+  }
+  $('answer').blur();
+  showScreen('home');
+  await renderHome().catch(err=>console.error('endSurvival: renderHome failed',err));
+  openSurvivalResults(probs,{streak,best:res.best,isBest:res.isBest,prev:res.prev,cause,xpEarned});
+}
+
+/* survival completion — reuses the results sheet, led by the streak you reached. */
+function openSurvivalResults(probs,info){
+  $('res-medal').hidden=true;
+  $('res-score-label').textContent='Streak: ';
+  $('res-rate-label').textContent='';
+  $('res-score').textContent=info.streak;
+  $('res-rate').textContent=(info.isBest&&info.streak>0?'new record!':'best '+info.best)+' · solved in a row';
+  let xh='';
+  if(info.xpEarned) xh+='<span class="res-xp">+'+info.xpEarned+' XP</span>';
+  const win=info.isBest&&info.streak>0;
+  xh+='<span class="res-ghost '+(win?'win':'lose')+'">'+SKULL_SVG_SM+
+    (win?'New best · '+info.streak:(info.streak>0?'Survived '+info.streak:'No streak this run'))+'</span>';
+  xh+='<span class="res-ghost info">'+(info.cause==='timeout'?'Ran out of time':'Wrong answer')+'</span>';
+  const ex=$('res-extra'); ex.innerHTML=xh; ex.hidden=false;
+  renderOpTable($('res-optable'),opStats(probs));
+  const det=$('res-details'); det.innerHTML=probRowsHTML(probs); det.hidden=true;
+  $('res-toggle').textContent='Details ›';
+  openSheet('sheet-results');
 }
 
 /* ===================================================================
@@ -2069,6 +2226,22 @@ function renderGauntlet(){
   }
 }
 
+/* ---------- survival launch card (below the gauntlet) ---------- */
+function renderSurvival(){
+  const best=Math.max(0,progress.survivalBest|0);
+  $('surv-card').innerHTML=
+    '<div class="sv-head"><span class="sv-skull">'+SKULL_SVG+'</span>'+
+      '<span class="sv-kicker">SURVIVAL</span>'+
+      (best?'<span class="sv-best">'+SKULL_SVG_SM+'BEST '+best+'</span>'
+           :'<span class="sv-tag">NEW</span>')+'</div>'+
+    '<div class="sv-title">Sudden death</div>'+
+    '<div class="sv-blurb">One wrong answer &mdash; or one beat too slow &mdash; ends the run. '+
+      'The clock tightens with every solve. How far can you get?</div>'+
+    '<button class="sv-cta" id="btn-survival">'+SKULL_SVG_SM+' Start survival run</button>'+
+    '<div class="sv-foot">'+(best?'Beat your record of '+best+' in a row'
+                                  :'Set your first record')+'</div>';
+}
+
 /* ===================================================================
    HOME  /  HISTORY
    =================================================================== */
@@ -2101,6 +2274,7 @@ async function renderHome(){
     gauntletToday={key:gkey,facts,parMs};
   }
   renderGauntlet();
+  renderSurvival();
   if(freshTrophies.length) revealTrophies(freshTrophies);   // queue trophy cards, after the renders
   flushCelebrations();   // pop any queued milestone cards (rank/PB/goal/trophy)
   renderBackupNudge(sessions);
@@ -2210,6 +2384,7 @@ const TROPHY_ICON={
   moon:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
   locked:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  skull:'<path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.3 4.4 3 5.5V19a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2.5c1.7-1.1 3-2.9 3-5.5a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.2" r="1.4"/><circle cx="15" cy="11.2" r="1.4"/><path d="M10.2 20v-2.2M13.8 20v-2.2"/>',
 };
 function icoSVG(name,size){
   size=size||22;
@@ -2276,6 +2451,7 @@ function computeCheapStats(sessions,now){
     bestGauntletStreak:bestGauntletStreak(progress.gauntletClears),
     golds:mc.gold, silvers:mc.silver, bronzes:mc.bronze,
     totalProblems:st.probs||0, fastestCorrectMs:st.fastestMs||0,
+    bestSurvival:progress.survivalBest||0,
   };
 }
 function computeMasteryStats(problems,now){
@@ -3120,6 +3296,8 @@ $('btn-start').addEventListener('click',startGame);
 /* the gauntlet CTA is re-created on every renderGauntlet — delegate (the click
    handler stays inside the tap gesture, so beginGauntlet's focus() opens the keyboard) */
 $('gaunt-card').addEventListener('click',e=>{ if(e.target.closest('#btn-gauntlet')) startGauntlet(); });
+/* the survival CTA is re-created on every renderSurvival — delegate */
+$('surv-card').addEventListener('click',e=>{ if(e.target.closest('#btn-survival')) startSurvival(); });
 $('btn-quit').addEventListener('click',quitGame);
 /* The three home destinations. Stats and Settings are hubs with a segmented
    sub-nav; opening one resets it to its first tab. showStatsTab / showSettingsTab

@@ -27,6 +27,16 @@
   const GAUNTLET_REWARD = 50;      // flat XP for the first clear of a day (placeholder)
   const GAUNTLET_WINDOW_DAYS = 21; // recent-history window the weak-fact set is drawn from
 
+  /* ---- survival / sudden death ----
+     No overall timer: each problem has its OWN shrinking budget, and a single
+     miss (wrong, or the budget running out) ends the run. The budget starts
+     generous and tightens with every solve, so the run is self-limiting — the
+     escalation comes from the clock, not from the number ranges (that's the
+     separate "ladder" idea). All pure + unit-tested. */
+  const SURVIVAL_START_MS = 8000;  // time budget for the first problem
+  const SURVIVAL_FLOOR_MS = 3000;  // tightest the budget ever gets
+  const SURVIVAL_STEP_MS = 250;    // shaved off the budget per solve (floor at 20 solved)
+
   /* ---- dates (local-time day keys) ---- */
   function dayKey(d) {
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
@@ -166,6 +176,7 @@
   function defaultProgress() {
     return {
       xp: 0, xpLifetime: 0, freezes: 0, freezeDays: {}, gauntletClears: {}, gauntletMedals: {},
+      survivalBest: 0,
       trophies: {}, trophiesSeenAt: 0, stats: { probs: 0, fastestMs: 0 }, v: 1,
     };
   }
@@ -187,6 +198,7 @@
       freezeDays: (p.freezeDays && typeof p.freezeDays === 'object') ? p.freezeDays : {},
       gauntletClears: (p.gauntletClears && typeof p.gauntletClears === 'object') ? p.gauntletClears : {},
       gauntletMedals: (p.gauntletMedals && typeof p.gauntletMedals === 'object') ? p.gauntletMedals : {},
+      survivalBest: Math.max(0, p.survivalBest | 0),
       // trophies map values are earn-timestamps (ms) — keep verbatim (never |0; that truncates ms)
       trophies: (p.trophies && typeof p.trophies === 'object') ? p.trophies : {},
       trophiesSeenAt: Math.max(0, Number(p.trophiesSeenAt) || 0),
@@ -208,6 +220,24 @@
     if (!canBuyFreeze(progress)) return false;
     progress.xp -= FREEZE_COST; progress.freezes++;
     return true;
+  }
+
+  /* ---- survival ---- */
+  /* time budget (ms) for the survival problem at 0-based index `solved` — the
+     player has already cleared `solved` problems, and each one tightens the
+     clock by SURVIVAL_STEP_MS down to a SURVIVAL_FLOOR_MS floor. */
+  function survivalTimeLimit(solved) {
+    solved = Math.max(0, solved | 0);
+    return Math.max(SURVIVAL_FLOOR_MS, SURVIVAL_START_MS - solved * SURVIVAL_STEP_MS);
+  }
+  /* fold a finished run's streak into the lifetime best (monotonic). Mutates
+     progress; returns {best, isBest, prev}. */
+  function recordSurvival(progress, streak) {
+    streak = Math.max(0, streak | 0);
+    const prev = Math.max(0, progress.survivalBest | 0);
+    const isBest = streak > prev;
+    if (isBest) progress.survivalBest = streak;
+    return { best: Math.max(prev, streak), isBest, prev };
   }
 
   /* ---- ghost (steady pace = your best rate for this preset) ---- */
@@ -634,7 +664,7 @@
   const TROPHY = {
     PERFECT_MIN: 30,                      // a "flawless" game must be at least this many problems
     QUICKDRAW_MS: 1000, LIGHTNING_MS: 600,
-    HIGH_SCORE: 100,
+    HIGH_SCORE: 100, SURVIVAL: 25,
     VOL: [100, 1000, 10000], STRONG: [25, 100],
     DAY_STREAK: [7, 30, 100], GAUNT_STREAK: 7, GOLDS: 10,
   };
@@ -685,6 +715,9 @@
     { id: 'rec-highscore', group: 'records', icon: 'trophy', name: 'High Score',
       desc: 'Solve ' + TROPHY.HIGH_SCORE + '+ in a single game', reached: s => (s.bestScore || 0) >= TROPHY.HIGH_SCORE,
       progress: s => ({ cur: Math.min(s.bestScore || 0, TROPHY.HIGH_SCORE), target: TROPHY.HIGH_SCORE }) },
+    { id: 'rec-survival', group: 'records', icon: 'skull', name: 'Survivor',
+      desc: 'Reach a survival streak of ' + TROPHY.SURVIVAL, reached: s => (s.bestSurvival || 0) >= TROPHY.SURVIVAL,
+      progress: s => ({ cur: Math.min(s.bestSurvival || 0, TROPHY.SURVIVAL), target: TROPHY.SURVIVAL }) },
     // mastery — the fluency grid
     ...TROPHY.STRONG.map((n, i) => ({
       id: 'mas-' + n, group: 'mastery', icon: 'sprout', name: ['Green Thumb', 'Cultivated'][i],
@@ -907,6 +940,7 @@
     return {
       xp: Math.max(cur.xp, inc.xp), xpLifetime: Math.max(cur.xpLifetime, inc.xpLifetime),
       freezes: Math.max(cur.freezes, inc.freezes), freezeDays, gauntletClears, gauntletMedals,
+      survivalBest: Math.max(cur.survivalBest, inc.survivalBest),
       trophies, trophiesSeenAt: Math.max(cur.trophiesSeenAt, inc.trophiesSeenAt),
       stats: { probs, fastestMs }, v: 1,
     };
@@ -939,6 +973,7 @@
     PLUS, MINUS, TIMES, DIV, OP_ORDER,
     DAILY_GOAL, FREEZE_COST, MAX_FREEZES,
     GAUNTLET_SIZE, GAUNTLET_REWARD, GAUNTLET_WINDOW_DAYS,
+    SURVIVAL_START_MS, SURVIVAL_FLOOR_MS, SURVIVAL_STEP_MS, survivalTimeLimit, recordSurvival,
     dayKey, parseKey, addDays,
     answerFor, canonFact, factKey, genProblem,
     dayCounts, daySatisfied, currentStreak, bestStreak, reconcileFreezes,
