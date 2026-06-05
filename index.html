@@ -2337,7 +2337,11 @@ function rankRowHTML(){
   let hasNew=false;
   for(const k in trophies){ if(trophies[k]!=null && trophies[k]>seenAt){ hasNew=true; break; } }
   const tally=counts.earned+'/'+counts.total+' trophies';
-  const sub=rk.isMax?('Max rank · '+tally):(fmtNum(rk.xpForNext)+' XP to '+escapeHTML(rk.next.name)+' · '+tally);
+  /* the rank row is the lifetime widget, so lead the sub-line with the lifetime
+     XP total (distinct from the spendable wallet shown top-right), then progress
+     to the next rank and the trophy tally */
+  const toNext=rk.isMax?'Max rank':(fmtNum(rk.xpForNext)+' to '+escapeHTML(rk.next.name));
+  const sub=fmtNum(xpL)+' lifetime · '+toNext+' · '+tally;
   return '<button class="rank-row" id="btn-rank" aria-label="Open Trophy Case — rank '+escapeHTML(rk.rank.name)+'">'+
     '<span class="rk-badge">'+rankEmblemSVG(rk.index,32)+'</span>'+
     '<span class="rk-main">'+
