@@ -799,6 +799,29 @@
     box-shadow:0 8px 24px -12px rgb(var(--magenta-rgb) / .6);}
   .sv-cta:active{filter:brightness(1.06);}
   .sv-foot{margin-top:13px;font-size:12.5px;color:var(--muted);position:relative;}
+  /* which Settings mode this run will drill (kept in step with the picker) */
+  .sv-mode{margin:12px 0 2px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;position:relative;}
+  .sv-mode-k{font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--muted);}
+  .sv-mode-v{font-family:var(--disp);font-size:14px;font-weight:800;color:var(--ink);letter-spacing:-.2px;}
+  .sv-ops{font-variant-numeric:tabular-nums;color:var(--magenta-ink);font-weight:700;letter-spacing:.14em;
+    background:rgb(var(--magenta-rgb) / .12);border:1px solid rgb(var(--magenta-rgb) / .26);
+    padding:3px 9px;border-radius:8px;}
+
+  /* ---------- survival results: the fact that ended the run ---------- */
+  .res-miss{margin:14px 0 2px;padding:13px 14px 14px;border-radius:14px;background:var(--panel-2);border:1px solid var(--line);}
+  .res-miss[hidden]{display:none;}
+  .miss-head{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+  .miss-q{font-family:var(--disp);font-size:26px;font-weight:800;letter-spacing:-.3px;margin:5px 0 11px;
+    font-variant-numeric:tabular-nums;color:var(--ink);}
+  .miss-cells{display:flex;gap:10px;}
+  .miss-cell{flex:1;display:flex;flex-direction:column;gap:3px;padding:9px 11px;border-radius:10px;
+    border:1px solid var(--line);background:var(--panel);}
+  .miss-cell .miss-k{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+  .miss-cell .miss-v{font-family:var(--disp);font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05;color:var(--ink);}
+  .miss-cell.wrong{border-color:rgb(var(--red-rgb) / .35);background:rgb(var(--red-rgb) / .08);}
+  .miss-cell.wrong .miss-v{color:var(--red-ink);}
+  .miss-cell.ok{border-color:rgb(var(--ok-rgb) / .35);background:rgb(var(--ok-rgb) / .08);}
+  .miss-cell.ok .miss-v{color:var(--ok-ink);}
 
   /* ---------- rank row (foot of the streak card → opens the Trophy Case) ----------
      XP used to be a dead-end readout; now the lifetime total drives a named RANK
@@ -1143,6 +1166,7 @@
     <div class="res-acc" id="res-acc" hidden></div>
     <div class="res-rate"><span id="res-rate-label">Rate: </span><span id="res-rate">0</span></div>
     <div id="res-extra" hidden></div>
+    <div id="res-miss" hidden></div>
     <h3>By operation</h3>
     <table class="op-table" id="res-optable"></table>
     <div style="margin:14px 0 4px;"><a class="link" id="res-toggle">Details &rsaquo;</a></div>
@@ -1797,16 +1821,16 @@ async function endGauntlet(){
    streak (progress.survivalBest) and 1 XP per solve. */
 const SKULL_SVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.3 4.4 3 5.5V19a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2.5c1.7-1.1 3-2.9 3-5.5a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.2" r="1.4"/><circle cx="15" cy="11.2" r="1.4"/><path d="M10.2 20v-2.2M13.8 20v-2.2"/></svg>';
 const SKULL_SVG_SM='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.3 4.4 3 5.5V19a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2.5c1.7-1.1 3-2.9 3-5.5a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.2" r="1.4"/><circle cx="15" cy="11.2" r="1.4"/><path d="M10.2 20v-2.2M13.8 20v-2.2"/></svg>';
-/* a steady, all-ops mix in a comparable difficulty band (times tables for ×/÷, a
-   moderate range for +/−) so the escalation comes from the tightening clock, not
-   from wildly swingy problems — keeps "how high can you climb" a fair contest. */
-const SURVIVAL_CONFIG={presetName:'Survival',durationSec:0,
-  ops:{add:true,sub:true,mul:true,div:true},add:R(2,50,2,50),mul:R(2,12,2,12)};
-
-function startSurvival(){ beginSurvival(); }
+function startSurvival(){
+  if(!anyOpEnabled(config)){ toast('Enable at least one operation'); return; }
+  beginSurvival();
+}
 
 function beginSurvival(){
-  const cfg=clone(SURVIVAL_CONFIG);
+  /* survival drills your CURRENTLY-SELECTED mode (the Settings ops + ranges), so
+     it escalates whatever you're practising; the overall duration is dropped —
+     survival's pressure is the per-problem clock, not a session timer. */
+  const cfg=clone(config); cfg.durationSec=0;
   game={
     sessionId:uuid(), mode:'survival', config:cfg,
     problems:[], wrongAnswer:null, ended:false, solved:0,
@@ -1834,6 +1858,13 @@ async function endSurvival(cause){
   clearInterval(game.timer);
   const probs=game.problems;
   const streak=game.solved;                   // problems cleared before the miss
+  /* the fact that ended the run — for the results recap. On a wrong answer we
+     have what they typed (game.wrongAnswer); on a timeout there's no answer. */
+  const miss=game.current?{
+    question:game.current.display,
+    correct:game.current.correctAnswer,
+    your:cause==='wrong'?game.wrongAnswer:null,
+  }:null;
   /* bank the best + XP in memory first so the results sheet is right even if the
      write below fails (quota / Private Browsing) */
   const rankBefore=rankForXp(progress.xpLifetime);   // survival XP can rank you up
@@ -1858,7 +1889,7 @@ async function endSurvival(cause){
   $('answer').blur();
   showScreen('home');
   await renderHome().catch(err=>console.error('endSurvival: renderHome failed',err));
-  openSurvivalResults(probs,{streak,best:res.best,isBest:res.isBest,prev:res.prev,cause,xpEarned});
+  openSurvivalResults(probs,{streak,best:res.best,isBest:res.isBest,prev:res.prev,cause,xpEarned,miss});
 }
 
 /* survival completion — reuses the results sheet, led by the streak you reached. */
@@ -1873,8 +1904,23 @@ function openSurvivalResults(probs,info){
   const win=info.isBest&&info.streak>0;
   xh+='<span class="res-ghost '+(win?'win':'lose')+'">'+SKULL_SVG_SM+
     (win?'New best · '+info.streak:(info.streak>0?'Survived '+info.streak:'No streak this run'))+'</span>';
-  xh+='<span class="res-ghost info">'+(info.cause==='timeout'?'Ran out of time':'Wrong answer')+'</span>';
   const ex=$('res-extra'); ex.innerHTML=xh; ex.hidden=false;
+  /* the recap of the fact that ended it: the question, what you entered (or "—"
+     when the clock ran out), and the right answer. */
+  const mEl=$('res-miss');
+  if(info.miss){
+    const m=info.miss, timeout=info.cause==='timeout';
+    mEl.innerHTML=
+      '<div class="miss-head">'+(timeout?'Ran out of time on':'The one that got you')+'</div>'+
+      '<div class="miss-q">'+escapeHTML(m.question)+'</div>'+
+      '<div class="miss-cells">'+
+        '<span class="miss-cell wrong"><span class="miss-k">You</span>'+
+          '<span class="miss-v">'+(m.your!=null?escapeHTML(m.your):'—')+'</span></span>'+
+        '<span class="miss-cell ok"><span class="miss-k">Answer</span>'+
+          '<span class="miss-v">'+escapeHTML(m.correct)+'</span></span>'+
+      '</div>';
+    mEl.hidden=false;
+  }else mEl.hidden=true;
   renderOpTable($('res-optable'),opStats(probs));
   const det=$('res-details'); det.innerHTML=probRowsHTML(probs); det.hidden=true;
   $('res-toggle').textContent='Details ›';
@@ -1901,6 +1947,7 @@ function renderOpTable(el,rows){
 
 function openResults(session,problems,extra){
   $('res-medal').hidden=true;                 // medal hero is gauntlet-only
+  $('res-miss').hidden=true;                  // miss recap is survival-only
   $('res-score-label').textContent='Score: ';
   $('res-rate-label').textContent='Rate: ';
   $('res-score').textContent=session.score;
@@ -1953,6 +2000,7 @@ function probRowsHTML(problems){
    streak / earned-XP / best-today as pills. The medal is the payoff for getting
    faster; par makes "beat the clock" mean the same thing on every day's set. */
 function openGauntletResults(probs,info){
+  $('res-miss').hidden=true;                  // miss recap is survival-only
   const ms=info.ms, par=info.par||0, medal=info.medal||'bronze';
   const beat=par>0&&ms<=par;
   const sub=par>0?(beat?'beat par by '+fmtS(par-ms):'cleared · par was '+fmtS(par)):'cleared';
@@ -2229,6 +2277,8 @@ function renderGauntlet(){
 /* ---------- survival launch card (below the gauntlet) ---------- */
 function renderSurvival(){
   const best=Math.max(0,progress.survivalBest|0);
+  const modeName=config.presetName||'Custom';
+  const opsStr=opsLabel(opsSig(config));        // e.g. "+ − × ÷" of the enabled ops
   $('surv-card').innerHTML=
     '<div class="sv-head"><span class="sv-skull">'+SKULL_SVG+'</span>'+
       '<span class="sv-kicker">SURVIVAL</span>'+
@@ -2237,6 +2287,9 @@ function renderSurvival(){
     '<div class="sv-title">Sudden death</div>'+
     '<div class="sv-blurb">One wrong answer &mdash; or one beat too slow &mdash; ends the run. '+
       'The clock tightens with every solve. How far can you get?</div>'+
+    '<div class="sv-mode"><span class="sv-mode-k">YOUR MODE</span>'+
+      '<span class="sv-mode-v">'+escapeHTML(modeName)+'</span>'+
+      '<span class="sv-ops">'+opsStr+'</span></div>'+
     '<button class="sv-cta" id="btn-survival">'+SKULL_SVG_SM+' Start survival run</button>'+
     '<div class="sv-foot">'+(best?'Beat your record of '+best+' in a row'
                                   :'Set your first record')+'</div>';
@@ -2747,6 +2800,7 @@ function readSettings(){           // pull edited values back into config
   config.presetName='Custom';
   Store.saveConfig(config);
   renderPresets();
+  renderSurvival();   // keep the survival card's "your mode" line in step
 }
 
 /* settings listeners */
@@ -2763,12 +2817,12 @@ $('dur-up').addEventListener('click',()=>{
   readSettings();
 });
 $('btn-reset').addEventListener('click',()=>{
-  loadPreset(DEFAULT_PRESET); Store.saveConfig(config); syncSettings();
+  loadPreset(DEFAULT_PRESET); Store.saveConfig(config); syncSettings(); renderSurvival();
   toast('Reset to '+DEFAULT_PRESET);
 });
 $('preset-list').addEventListener('click',e=>{
   const card=e.target.closest('[data-preset]'); if(!card) return;
-  loadPreset(card.dataset.preset); Store.saveConfig(config); syncSettings();
+  loadPreset(card.dataset.preset); Store.saveConfig(config); syncSettings(); renderSurvival();
   toast(card.dataset.preset+' selected');
 });
 
