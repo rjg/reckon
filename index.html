@@ -704,6 +704,27 @@
   #cell-pop .cp-stats .stat-card .v{font-size:18px;margin-top:1px;}
   #cell-pop .cp-stats .stat-card .s{font-size:10px;margin-top:2px;}
 
+  /* ---------- regular game launch card (the primary, signal-identity play surface) ----------
+     Reuses the gauntlet/survival anatomy (gc-* + the survival "your mode" line)
+     so it reads as the lead sibling of those two launch cards. No hazard hatch —
+     a clean glow instead — so it stays distinct from the gauntlet beneath it. */
+  .play-card{
+    margin:0 16px 18px;padding:16px 17px 15px;border-radius:18px;color:var(--ink);
+    background:
+      radial-gradient(130% 85% at 100% -12%, rgb(var(--signal-rgb) / .16), transparent 56%),
+      var(--panel);
+    border:1px solid rgb(var(--signal-rgb) / .26);
+    box-shadow:0 12px 30px -16px rgb(var(--signal-rgb) / .4);position:relative;overflow:hidden;
+  }
+  .play-card::after{content:"";position:absolute;right:-50px;top:-70px;width:200px;height:200px;
+    pointer-events:none;border-radius:50%;
+    background:radial-gradient(circle,rgb(var(--signal-rgb) / .16),transparent 70%);}
+  .pl-ops{font-variant-numeric:tabular-nums;color:var(--signal-ink);font-weight:700;letter-spacing:.14em;
+    background:rgb(var(--signal-rgb) / .12);border:1px solid rgb(var(--signal-rgb) / .26);
+    padding:3px 9px;border-radius:8px;}
+  .pl-ranges{margin:9px 0 2px;font-size:11.5px;color:var(--muted);position:relative;
+    font-variant-numeric:tabular-nums;line-height:1.45;}
+
   /* ---------- daily gauntlet card ---------- */
   .gaunt-card{
     margin:0 16px 18px;padding:16px 17px 15px;border-radius:18px;color:var(--ink);
@@ -913,7 +934,7 @@
   @keyframes rise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
   #screen-home.active .home-title,
   #screen-home.active .streak-card,
-  #screen-home.active .home-actions,
+  #screen-home.active .play-card,
   #screen-home.active .gaunt-card,
   #screen-home.active .surv-card,
   #screen-home.active .backup-nudge:not([hidden]){
@@ -921,7 +942,7 @@
   }
   #screen-home.active .home-title{animation-delay:.02s;}
   #screen-home.active .streak-card{animation-delay:.08s;}
-  #screen-home.active .home-actions{animation-delay:.14s;}
+  #screen-home.active .play-card{animation-delay:.14s;}
   #screen-home.active .gaunt-card{animation-delay:.2s;}
   #screen-home.active .surv-card{animation-delay:.26s;}
   @media (prefers-reduced-motion:reduce){
@@ -977,9 +998,7 @@
   </div>
   <div class="home-title"><span class="logo">Reckon</span></div>
   <div class="streak-card" id="streak-card"></div>
-  <div class="home-actions">
-    <button class="big-btn blue" id="btn-start">Start Game</button>
-  </div>
+  <div class="play-card" id="play-card"></div>
   <div class="backup-nudge" id="backup-nudge" hidden></div>
   <div class="gaunt-card" id="gaunt-card"></div>
   <div class="surv-card" id="surv-card"></div>
@@ -1821,6 +1840,8 @@ async function endGauntlet(){
    streak (progress.survivalBest) and 1 XP per solve. */
 const SKULL_SVG='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.3 4.4 3 5.5V19a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2.5c1.7-1.1 3-2.9 3-5.5a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.2" r="1.4"/><circle cx="15" cy="11.2" r="1.4"/><path d="M10.2 20v-2.2M13.8 20v-2.2"/></svg>';
 const SKULL_SVG_SM='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.3 4.4 3 5.5V19a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2.5c1.7-1.1 3-2.9 3-5.5a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.2" r="1.4"/><circle cx="15" cy="11.2" r="1.4"/><path d="M10.2 20v-2.2M13.8 20v-2.2"/></svg>';
+const PLAY_SVG='<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+const PLAY_SVG_SM='<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 function startSurvival(){
   if(!anyOpEnabled(config)){ toast('Enable at least one operation'); return; }
   beginSurvival();
@@ -2274,6 +2295,33 @@ function renderGauntlet(){
   }
 }
 
+/* ---------- regular game launch card (the primary play surface) ----------
+   Mirrors the gauntlet/survival anatomy in the signal identity and surfaces the
+   currently-selected settings — mode, ops, timer, ranges — so a glance tells you
+   what "Start" will play. Re-rendered whenever the picker changes so it stays in
+   step (see renderHome / readSettings / preset handlers). */
+function renderPlayCard(){
+  const modeName=config.presetName||'Custom';
+  const off=!anyOpEnabled(config);
+  const opsStr=off?'NONE':opsLabel(opsSig(config));     // "+ − × ÷" of the enabled ops
+  const a=config.add, m=config.mul;
+  const showAS=config.ops.add||config.ops.sub, showMD=config.ops.mul||config.ops.div;
+  const bits=[config.durationSec+'s'];                  // timer first, then ranges per enabled group
+  if(showAS) bits.push('+− ('+a.min1+'–'+a.max1+')+('+a.min2+'–'+a.max2+')');
+  if(showMD) bits.push('×÷ ('+m.min1+'–'+m.max1+')×('+m.min2+'–'+m.max2+')');
+  $('play-card').innerHTML=
+    '<div class="gc-head"><span class="gc-bolt">'+PLAY_SVG+'</span>'+
+      '<span class="gc-kicker">PLAY</span></div>'+
+    '<div class="gc-title">Timed game</div>'+
+    '<div class="gc-blurb">Solve as many as you can before the clock runs out.</div>'+
+    '<div class="sv-mode"><span class="sv-mode-k">YOUR MODE</span>'+
+      '<span class="sv-mode-v">'+escapeHTML(modeName)+'</span>'+
+      '<span class="pl-ops">'+opsStr+'</span></div>'+
+    '<div class="pl-ranges">'+bits.join('  ·  ')+'</div>'+
+    '<button class="gc-cta" id="btn-start">'+PLAY_SVG_SM+' Start game</button>'+
+    '<div class="gc-foot"><span class="gc-foot-l">Change ops, ranges &amp; timer in Settings</span></div>';
+}
+
 /* ---------- survival launch card (below the gauntlet) ---------- */
 function renderSurvival(){
   const best=Math.max(0,progress.survivalBest|0);
@@ -2326,6 +2374,7 @@ async function renderHome(){
     const parMs=gauntletPar(facts,problems).parMs;
     gauntletToday={key:gkey,facts,parMs};
   }
+  renderPlayCard();
   renderGauntlet();
   renderSurvival();
   if(freshTrophies.length) revealTrophies(freshTrophies);   // queue trophy cards, after the renders
@@ -2800,7 +2849,7 @@ function readSettings(){           // pull edited values back into config
   config.presetName='Custom';
   Store.saveConfig(config);
   renderPresets();
-  renderSurvival();   // keep the survival card's "your mode" line in step
+  renderPlayCard(); renderSurvival();   // keep the launch cards' settings lines in step
 }
 
 /* settings listeners */
@@ -2817,12 +2866,12 @@ $('dur-up').addEventListener('click',()=>{
   readSettings();
 });
 $('btn-reset').addEventListener('click',()=>{
-  loadPreset(DEFAULT_PRESET); Store.saveConfig(config); syncSettings(); renderSurvival();
+  loadPreset(DEFAULT_PRESET); Store.saveConfig(config); syncSettings(); renderPlayCard(); renderSurvival();
   toast('Reset to '+DEFAULT_PRESET);
 });
 $('preset-list').addEventListener('click',e=>{
   const card=e.target.closest('[data-preset]'); if(!card) return;
-  loadPreset(card.dataset.preset); Store.saveConfig(config); syncSettings(); renderSurvival();
+  loadPreset(card.dataset.preset); Store.saveConfig(config); syncSettings(); renderPlayCard(); renderSurvival();
   toast(card.dataset.preset+' selected');
 });
 
@@ -3346,7 +3395,9 @@ function renderBackupNudge(sessions){
 /* ===================================================================
    WIRING
    =================================================================== */
-$('btn-start').addEventListener('click',startGame);
+/* the play CTA is re-created on every renderPlayCard — delegate (keeps the click
+   inside the tap gesture so beginGame's focus() opens the keyboard) */
+$('play-card').addEventListener('click',e=>{ if(e.target.closest('#btn-start')) startGame(); });
 /* the gauntlet CTA is re-created on every renderGauntlet — delegate (the click
    handler stays inside the tap gesture, so beginGauntlet's focus() opens the keyboard) */
 $('gaunt-card').addEventListener('click',e=>{ if(e.target.closest('#btn-gauntlet')) startGauntlet(); });
