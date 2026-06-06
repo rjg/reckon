@@ -2170,7 +2170,7 @@ function closeCelebration(){
   _celebrateReturn=null;
 }
 /* the confetti itself — fired behind each celebration card, and standalone from
-   the Appearance self-test. Two bottom-corner cannons fire up-and-inward and a
+   the Appearance self-test. A row of bottom cannons fire up-and-inward and a
    centre pop fills the middle; pieces come as confetti, streamers and dots that
    flutter down under air-drag, hold full colour, then fade over the last beat. */
 function confettiBurst(){
@@ -2182,15 +2182,18 @@ function confettiBurst(){
   const ctx=cv.getContext('2d'); ctx.scale(dpr,dpr);
   /* draw confetti from the live palette so it matches the active theme */
   const colors=['--ok','--cyan','--amber','--violet','--magenta'].map(v=>cssVar(v)||'#888');
-  const DUR=2600, rand=(a,b)=>a+Math.random()*(b-a);
+  const DUR=2800, rand=(a,b)=>a+Math.random()*(b-a);
   /* scale the launch power with the screen so it clears tall and short phones alike */
   const pow=Math.max(0.8,Math.min(1.5,H/700));
   const parts=[];
-  /* two corner cannons aimed inward + a wide centre pop */
+  /* four bottom cannons aimed up-and-inward + a wide centre pop — more guns, more
+     paper, more dopamine (still a single rAF loop that fades out and cleans up) */
   const emitters=[
-    {x:W*0.04, y:H*1.02, ang:-Math.PI*0.30, spread:0.42, n:75, spd:[13,21]},
-    {x:W*0.96, y:H*1.02, ang:-Math.PI*0.70, spread:0.42, n:75, spd:[13,21]},
-    {x:W*0.50, y:H*0.30, ang:-Math.PI*0.50, spread:1.10, n:55, spd:[6,12]},
+    {x:W*0.02, y:H*1.02, ang:-Math.PI*0.28, spread:0.42, n:95, spd:[14,23]},
+    {x:W*0.98, y:H*1.02, ang:-Math.PI*0.72, spread:0.42, n:95, spd:[14,23]},
+    {x:W*0.28, y:H*1.04, ang:-Math.PI*0.40, spread:0.34, n:70, spd:[15,24]},
+    {x:W*0.72, y:H*1.04, ang:-Math.PI*0.60, spread:0.34, n:70, spd:[15,24]},
+    {x:W*0.50, y:H*0.28, ang:-Math.PI*0.50, spread:1.20, n:85, spd:[6,13]},
   ];
   for(const e of emitters){
     for(let i=0;i<e.n;i++){
@@ -2199,7 +2202,7 @@ function confettiBurst(){
         x:e.x, y:e.y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp,
         g:rand(0.22,0.34), drag:rand(0.984,0.994),
         rot:rand(0,6.28), vr:rand(-0.34,0.34),
-        w:rand(6,11), h:kind<0.22?rand(12,22):rand(4,8),   // ~1 in 5 is a long streamer
+        w:rand(6,12), h:kind<0.28?rand(13,24):rand(4,8),   // ~1 in 4 is a long streamer
         round:kind>0.82,                                    // a few round dots
         sway:rand(0.6,1.8), ph:rand(0,6.28),
         c:colors[(Math.random()*colors.length)|0],
@@ -2492,6 +2495,9 @@ const TROPHY_ICON={
   shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>',
   locked:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   skull:'<path d="M12 3a8 8 0 0 0-8 8c0 2.6 1.3 4.4 3 5.5V19a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2.5c1.7-1.1 3-2.9 3-5.5a8 8 0 0 0-8-8z"/><circle cx="9" cy="11.2" r="1.4"/><circle cx="15" cy="11.2" r="1.4"/><path d="M10.2 20v-2.2M13.8 20v-2.2"/>',
+  calendar:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  snowflake:'<line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/>',
 };
 function icoSVG(name,size){
   size=size||22;
@@ -2522,6 +2528,7 @@ function fmtNum(n){ return (Math.round(Number(n)||0)).toLocaleString('en-US'); }
 /* the trophy grid is grouped; ranks render as the hero+ladder, not as tiles. */
 const GROUP_META=[
   {key:'streak',  name:'Streak'},
+  {key:'dedication',name:'Dedication'},
   {key:'gauntlet',name:'Gauntlet'},
   {key:'volume',  name:'Volume'},
   {key:'records', name:'Records'},
@@ -2538,14 +2545,16 @@ function computeCheapStats(sessions,now){
   const fd=progress.freezeDays||{};
   const cur=currentStreak(counts,fd,DAILY_GOAL,new Date(now));
   const bestDay=Math.max(bestStreak(counts,fd,DAILY_GOAL),cur);
-  let bestScore=0, bestScoreStd=0, bestFlawless=0, nightOwl=false;
+  let bestScore=0, bestScoreStd=0, bestFlawless=0, nightOwl=false, earlyBird=false, weekend=false;
   for(const s of sessions){
     const sc=s.score|0, dur=s.durationSec|0;
     if(sc>bestScore) bestScore=sc;
     if(dur>0 && dur<=TROPHY.HIGH_SCORE_MAX_SEC && sc>bestScoreStd) bestScoreStd=sc;   // High Score must be a standard-length game
     if((s.errorCount|0)===0 && sc>bestFlawless) bestFlawless=sc;                       // largest no-mistake game (accuracy ladder)
-    const h=new Date(s.endedAt).getHours();
-    if(h>=0 && h<5) nightOwl=true;
+    const d=new Date(s.endedAt), h=d.getHours(), wd=d.getDay();
+    if(h>=0 && h<5) nightOwl=true;            // secret: Night Owl
+    if(h>=5 && h<8) earlyBird=true;           // secret: Early Bird
+    if(wd===0 || wd===6) weekend=true;        // secret: Weekend Warrior (Sun/Sat)
   }
   const mc=medalCounts(progress.gauntletMedals);
   const st=progress.stats||{probs:0,fastestMs:0};
@@ -2553,8 +2562,9 @@ function computeCheapStats(sessions,now){
     xpLifetime:progress.xpLifetime||0,
     bestDayStreak:bestDay,
     totalGames:sessions.length,
-    bestScore, bestScoreStd, bestFlawless, nightOwl,
+    bestScore, bestScoreStd, bestFlawless, nightOwl, earlyBird, weekend,
     freezesBought:progress.freezesBought||0,
+    freezesUsed:Object.keys(progress.freezeDays||{}).length,   // secret: Cold Save (a freeze bridged a missed day)
     totalGauntlets:Object.keys(progress.gauntletClears||{}).length,
     bestGauntletStreak:bestGauntletStreak(progress.gauntletClears),
     golds:mc.gold, silvers:mc.silver, bronzes:mc.bronze,

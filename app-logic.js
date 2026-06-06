@@ -841,12 +841,15 @@
 
   /* trophy thresholds — pulled out so tests and the UI can reference them. */
   const TROPHY = {
-    QUICKDRAW_MS: 1000, LIGHTNING_MS: 600,
+    QUICKDRAW_MS: 1000, LIGHTNING_MS: 600, BLINK_MS: 400,
     HIGH_SCORE: 100, HIGH_SCORE_MAX_SEC: 120,    // 100-in-a-game must be a standard-length game, not a stretched custom timer
+    HIGH_SCORE_TIERS: [150, 200],                // higher standard-game score tiers, above the base 100
     SURVIVAL: 25, SURVIVAL_TIERS: SURVIVAL_TIERS,   // single source of truth (defined up in the survival section)
     FLAWLESS_TIERS: [15, 30, 50],                // no-mistake game sizes — the visible accuracy ladder
-    VOL: [100, 1000, 10000], STRONG: [25, 100],
-    DAY_STREAK: [7, 30, 100], GAUNT_STREAK: 7, GOLDS: 10, GOLD_TIERS: [10, 25, 50, 100],
+    VOL: [100, 1000, 10000, 50000], STRONG: [25, 100],
+    GAMES: [10, 100, 500],                       // games played, lifetime — the Dedication ladder
+    DAY_STREAK: [7, 30, 100, 365], GAUNT_STREAK: 7, GAUNT_STREAK_LONG: 30, GOLDS: 10, GOLD_TIERS: [10, 25, 50, 100],
+    GAUNT_CLEARS: [25, 100],                     // total gauntlet days cleared, cumulative (not consecutive)
     GRID_PCT: [50, 75, 100], GRID_REACHABLE: 312,   // "green the grid" tiers (% of all reachable cells)
   };
   const fastWithin = (s, ms) => (s.fastestCorrectMs > 0 && s.fastestCorrectMs <= ms);
@@ -866,9 +869,15 @@
   const TROPHY_DEFS = RANK_TROPHIES.concat([
     // streak — a day-streak you held
     ...TROPHY.DAY_STREAK.map((n, i) => ({
-      id: 'streak-' + n, group: 'streak', icon: 'flame', name: ['On Fire', 'Devoted', 'Unbroken'][i],
+      id: 'streak-' + n, group: 'streak', icon: 'flame', name: ['On Fire', 'Devoted', 'Unbroken', 'Eternal'][i],
       desc: 'Hold a ' + n + '-day streak',
       reached: s => (s.bestDayStreak || 0) >= n, progress: s => ({ cur: Math.min(s.bestDayStreak || 0, n), target: n }),
+    })),
+    // dedication — games played, lifetime (showing up, session after session)
+    ...TROPHY.GAMES.map((n, i) => ({
+      id: 'games-' + n, group: 'dedication', icon: 'calendar', name: ['Warmed Up', 'Regular', 'Seasoned'][i],
+      desc: 'Play ' + n + ' games',
+      reached: s => (s.totalGames || 0) >= n, progress: s => ({ cur: Math.min(s.totalGames || 0, n), target: n }),
     })),
     // gauntlet — the daily race
     { id: 'gaunt-first', group: 'gauntlet', icon: 'bolt', name: 'Into the Gauntlet',
@@ -886,10 +895,20 @@
       desc: 'Clear the gauntlet ' + TROPHY.GAUNT_STREAK + ' days running',
       reached: s => (s.bestGauntletStreak || 0) >= TROPHY.GAUNT_STREAK,
       progress: s => ({ cur: Math.min(s.bestGauntletStreak || 0, TROPHY.GAUNT_STREAK), target: TROPHY.GAUNT_STREAK }) },
+    { id: 'gaunt-streak30', group: 'gauntlet', icon: 'bolt', name: 'Unstoppable',
+      desc: 'Clear the gauntlet ' + TROPHY.GAUNT_STREAK_LONG + ' days running',
+      reached: s => (s.bestGauntletStreak || 0) >= TROPHY.GAUNT_STREAK_LONG,
+      progress: s => ({ cur: Math.min(s.bestGauntletStreak || 0, TROPHY.GAUNT_STREAK_LONG), target: TROPHY.GAUNT_STREAK_LONG }) },
+    // gauntlet — total days cleared (cumulative; rewards turning up even with gaps)
+    ...TROPHY.GAUNT_CLEARS.map((n, i) => ({
+      id: 'gaunt-clears' + n, group: 'gauntlet', icon: 'bolt', name: ['Challenger', 'Gauntlet Champion'][i],
+      desc: 'Clear ' + n + ' daily gauntlets',
+      reached: s => (s.totalGauntlets || 0) >= n, progress: s => ({ cur: Math.min(s.totalGauntlets || 0, n), target: n }),
+    })),
     // volume — problems answered, lifetime
     ...TROPHY.VOL.map((n, i) => ({
-      id: 'vol-' + n, group: 'volume', icon: 'layers', name: ['Centurion', 'Thousand Sums', 'Ten Thousand Things'][i],
-      desc: ['Answer 100 problems', 'Answer 1,000 problems', 'Answer 10,000 problems'][i],
+      id: 'vol-' + n, group: 'volume', icon: 'layers', name: ['Centurion', 'Thousand Sums', 'Ten Thousand Things', 'Myriad'][i],
+      desc: ['Answer 100 problems', 'Answer 1,000 problems', 'Answer 10,000 problems', 'Answer 50,000 problems'][i],
       reached: s => (s.totalProblems || 0) >= n, progress: s => ({ cur: Math.min(s.totalProblems || 0, n), target: n }),
     })),
     // speed & records
@@ -897,9 +916,16 @@
       desc: 'Answer correctly in under 1.0s', reached: s => fastWithin(s, TROPHY.QUICKDRAW_MS) },
     { id: 'rec-lightning', group: 'records', icon: 'bolt', name: 'Lightning',
       desc: 'Answer correctly in under 0.6s', reached: s => fastWithin(s, TROPHY.LIGHTNING_MS) },
+    { id: 'rec-blink', group: 'records', icon: 'bolt', name: 'Blink',
+      desc: 'Answer correctly in under 0.4s', reached: s => fastWithin(s, TROPHY.BLINK_MS) },
     { id: 'rec-highscore', group: 'records', icon: 'trophy', name: 'High Score',
       desc: 'Solve ' + TROPHY.HIGH_SCORE + '+ in a standard game', reached: s => (s.bestScoreStd || 0) >= TROPHY.HIGH_SCORE,
       progress: s => ({ cur: Math.min(s.bestScoreStd || 0, TROPHY.HIGH_SCORE), target: TROPHY.HIGH_SCORE }) },
+    ...TROPHY.HIGH_SCORE_TIERS.map((n, i) => ({
+      id: 'rec-highscore' + n, group: 'records', icon: 'trophy', name: ['High Roller', 'Powerhouse'][i],
+      desc: 'Solve ' + n + '+ in a standard game',
+      reached: s => (s.bestScoreStd || 0) >= n, progress: s => ({ cur: Math.min(s.bestScoreStd || 0, n), target: n }),
+    })),
     // accuracy — a visible ladder of clean (no-miss) games (was a single hidden "Flawless" secret)
     ...TROPHY.FLAWLESS_TIERS.map((n, i) => ({
       id: 'rec-flawless' + n, group: 'records', icon: 'sparkle',
@@ -942,6 +968,12 @@
       desc: 'Play between midnight and 5am', reached: s => !!s.nightOwl },
     { id: 'sec-saved', group: 'secret', icon: 'shield', name: 'Insured', secret: true,
       desc: 'Stock a streak freeze', reached: s => (s.freezesBought || 0) >= 1 },
+    { id: 'sec-earlybird', group: 'secret', icon: 'sun', name: 'Early Bird', secret: true,
+      desc: 'Play between 5 and 8 in the morning', reached: s => !!s.earlyBird },
+    { id: 'sec-weekend', group: 'secret', icon: 'star', name: 'Weekend Warrior', secret: true,
+      desc: 'Play on a Saturday or Sunday', reached: s => !!s.weekend },
+    { id: 'sec-coldsave', group: 'secret', icon: 'snowflake', name: 'Cold Save', secret: true,
+      desc: 'Have a streak freeze rescue a missed day', reached: s => (s.freezesUsed || 0) >= 1 },
   ]);
   const TROPHY_TOTAL = TROPHY_DEFS.length;
   const TROPHY_BY_ID = {};

@@ -1021,6 +1021,36 @@ test('evaluateTrophies earns the right emblems per system, with thresholds', () 
   assert.ok(ids({ freezesBought: 1 }).has('sec-saved'));
 });
 
+test('the expanded catalog earns its new tiers & secrets at the right thresholds', () => {
+  const ids = stats => new Set(Z.evaluateTrophies(stats));
+  // dedication — games played, lifetime
+  let s = ids({ totalGames: 100 });
+  assert.ok(s.has('games-10') && s.has('games-100') && !s.has('games-500'));
+  // streak — the new year-long Eternal tier (above the existing 7/30/100)
+  assert.ok(ids({ bestDayStreak: 365 }).has('streak-365'));
+  assert.ok(!ids({ bestDayStreak: 100 }).has('streak-365'));
+  // volume — the new 50k Myriad tier
+  assert.ok(ids({ totalProblems: 50000 }).has('vol-50000'));
+  assert.ok(!ids({ totalProblems: 10000 }).has('vol-50000'));
+  // records — Blink (<0.4s) sits below Lightning; higher High Score tiers ladder up
+  assert.ok(ids({ fastestCorrectMs: 350 }).has('rec-blink'));
+  assert.ok(!ids({ fastestCorrectMs: 500 }).has('rec-blink'));   // 0.5s clears Lightning but not Blink
+  s = ids({ bestScoreStd: 200 });
+  assert.ok(s.has('rec-highscore') && s.has('rec-highscore150') && s.has('rec-highscore200'));
+  assert.ok(!ids({ bestScoreStd: 150 }).has('rec-highscore200'));
+  // gauntlet — a 30-day streak and a cumulative clear-count ladder (distinct from the streak)
+  assert.ok(ids({ bestGauntletStreak: 30 }).has('gaunt-streak30'));
+  assert.ok(!ids({ bestGauntletStreak: 7 }).has('gaunt-streak30'));
+  s = ids({ totalGauntlets: 100 });
+  assert.ok(s.has('gaunt-clears25') && s.has('gaunt-clears100'));
+  // secrets — early bird / weekend / cold save (a freeze that bridged a missed day)
+  assert.ok(ids({ earlyBird: true }).has('sec-earlybird'));
+  assert.ok(ids({ weekend: true }).has('sec-weekend'));
+  assert.ok(ids({ freezesUsed: 1 }).has('sec-coldsave'));
+  // and none of the new ones leak onto an empty bundle
+  assert.deepEqual(Z.evaluateTrophies({}), []);
+});
+
 test('every TROPHY_DEF is well-formed and secret trophies are flagged', () => {
   const seen = new Set();
   for (const t of Z.TROPHY_DEFS) {
