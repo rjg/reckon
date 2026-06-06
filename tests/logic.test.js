@@ -968,6 +968,31 @@ test('survivalBest survives normalize and takes the max on merge', () => {
   assert.equal(m.survivalBest, 11);
 });
 
+/* Guard against silent data loss when a future mode adds a progress field.
+   Three functions define the persisted progress shape and MUST agree on its
+   field set:
+     · defaultProgress  — the source of truth (what's stored)
+     · normalizeProgress — sanitizes a loaded/imported record (drops anything
+       not listed, to keep untrusted backup JSON safe)
+     · mergeProgress     — folds an imported backup into the current progress
+   A field present in defaultProgress but missing from the other two would be
+   silently dropped on import/restore. This test fails the moment they diverge,
+   so adding e.g. `parkourBest` forces you to handle it everywhere a backup
+   touches it. (It also catches a value not surviving a normalize round-trip.) */
+test('progress shape stays in sync across default / normalize / merge', () => {
+  const keys = Object.keys(Z.defaultProgress()).sort();
+  assert.deepEqual(
+    Object.keys(Z.normalizeProgress(Z.defaultProgress())).sort(), keys,
+    'normalizeProgress is missing/adding a field vs defaultProgress — update it so backups keep every field');
+  assert.deepEqual(
+    Object.keys(Z.mergeProgress(Z.defaultProgress(), Z.defaultProgress())).sort(), keys,
+    'mergeProgress is missing/adding a field vs defaultProgress — update it so restore merges every field');
+  // every default field must round-trip through normalize unchanged (catches a
+  // field that's keyed but quietly zeroed/dropped on load/import)
+  const probe = Z.normalizeProgress(Z.defaultProgress());
+  for (const k of keys) assert.ok(k in probe, 'normalizeProgress drops "' + k + '"');
+});
+
 test('Survivor trophy is earned at the survival threshold', () => {
   const below = Z.evaluateTrophies({ bestSurvival: Z.TROPHY.SURVIVAL - 1 });
   const at = Z.evaluateTrophies({ bestSurvival: Z.TROPHY.SURVIVAL });
