@@ -27,6 +27,19 @@
   const GAUNTLET_REWARD = 50;      // flat XP for the first clear of a day (placeholder)
   const GAUNTLET_WINDOW_DAYS = 21; // recent-history window the weak-fact set is drawn from
 
+  /* ---- skill-weighted XP ----
+     Base XP stays 1 per solved problem, so a no-combo run on the easiest preset
+     earns exactly its score — nothing is ever worth LESS than it is today. Two
+     pure multipliers reward playing SHARP on top of that base:
+       · combo      — consecutive first-try-correct solves ramp a live multiplier
+                      that RESETS on any miss, so accuracy (not just volume) pays.
+       · difficulty — bigger operand ranges earn a gentle bonus (floor 1.0, never a
+                      penalty), so challenge isn't out-earned by grinding Easy. */
+  const COMBO_STEP = 5;       // every N clean solves in a row...
+  const COMBO_BONUS = 0.10;   // ...lifts the live multiplier by this...
+  const COMBO_MAX = 0.50;     // ...up to +50% (the multiplier tops out at 1.50)
+  const DIFF_MIN = 1.0, DIFF_MAX = 1.5;  // difficulty-weight band; the 1.0 floor means never a penalty
+
   /* ---- survival / sudden death ----
      No overall timer: each problem has its OWN shrinking budget, and a single
      miss (wrong, or the budget running out) ends the run. The budget starts
@@ -211,6 +224,63 @@
     amount = Math.max(0, amount | 0);
     progress.xp += amount; progress.xpLifetime += amount;
     return amount;
+  }
+
+  /* XP multiplier for a clean solve that already had `run` clean solves before
+     it: 1.0 for the first COMBO_STEP in a row, then +COMBO_BONUS per further
+     step, capped at 1 + COMBO_MAX. A miss (handled by the caller) resets `run`. */
+  function comboMultiplier(run) {
+    const steps = Math.floor(Math.max(0, run | 0) / COMBO_STEP);
+    return 1 + Math.min(COMBO_MAX, steps * COMBO_BONUS);
+  }
+  /* Walk a played session's problems IN ANSWER ORDER and total the combo-weighted
+     base XP: every completed problem banks at least 1 (today's value), a clean
+     first-try solve also earns its live combo multiplier and extends the run, and
+     a fumble (wasCorrect=false) banks its 1 but breaks the run. Returns the pieces
+     so the results sheet can explain the number. */
+  function comboBreakdown(problems) {
+    let run = 0, best = 0, base = 0, bonus = 0;
+    for (const p of (problems || [])) {
+      base += 1;
+      if (p && p.wasCorrect) { bonus += comboMultiplier(run) - 1; run++; if (run > best) best = run; }
+      else run = 0;
+    }
+    return { base, bonus, bestRun: best, bestMult: comboMultiplier(Math.max(0, best - 1)) };
+  }
+  /* A gentle XP weight from the configured operand ranges, so harder settings
+     aren't out-earned by grinding Easy. Uses the midpoint of each enabled op's
+     range as a stand-in for "how big are these numbers", on a log curve
+     calibrated so the built-in Easy preset sits at the 1.0 floor and Normal/Hard
+     reach ~1.2; clamped to [DIFF_MIN, DIFF_MAX]. Pure function of config. */
+  function difficultyWeight(config) {
+    if (!config || !config.ops) return DIFF_MIN;
+    const a = config.add || {}, m = config.mul || {}, mids = [];
+    const mid = (lo, hi) => (Math.max(0, lo || 0) + Math.max(0, hi || 0)) / 2;
+    if (config.ops.add || config.ops.sub) mids.push(mid(a.min1, a.max1), mid(a.min2, a.max2));
+    if (config.ops.mul || config.ops.div) mids.push(mid(m.min1, m.max1), mid(m.min2, m.max2));
+    if (!mids.length) return DIFF_MIN;
+    const typical = mids.reduce((s, x) => s + x, 0) / mids.length;
+    const w = 0.75 + 0.122 * Math.log(Math.max(1, typical));
+    return Math.max(DIFF_MIN, Math.min(DIFF_MAX, w));
+  }
+  /* Total XP for a freshly played session: combo-weighted base × difficulty,
+     rounded. `sessionXpInfo` returns the pieces (for the results sheet); `sessionXp`
+     is the number. A run with no combo and the easiest ranges == its score. */
+  function sessionXpInfo(problems, config) {
+    const cb = comboBreakdown(problems);
+    const diff = difficultyWeight(config);
+    const xp = Math.max(0, Math.round((cb.base + cb.bonus) * diff));
+    return { xp, base: cb.base, comboBonus: cb.bonus, diff, bestRun: cb.bestRun, bestMult: cb.bestMult };
+  }
+  function sessionXp(problems, config) { return sessionXpInfo(problems, config).xp; }
+  /* Survival's whole run is one clean chain (a miss ends it), so its XP is the
+     same combo curve summed over the streak, × difficulty — counted directly from
+     the streak length so the terminal miss problem isn't double-handled. */
+  function survivalXp(streak, config) {
+    streak = Math.max(0, streak | 0);
+    let combo = 0;
+    for (let k = 0; k < streak; k++) combo += comboMultiplier(k);
+    return Math.max(0, Math.round(combo * difficultyWeight(config)));
   }
   function canBuyFreeze(progress) {
     return progress.xp >= FREEZE_COST && progress.freezes < MAX_FREEZES;
@@ -978,6 +1048,8 @@
     answerFor, canonFact, factKey, genProblem,
     dayCounts, daySatisfied, currentStreak, bestStreak, reconcileFreezes,
     defaultProgress, normalizeProgress, xpForSession, awardXp, canBuyFreeze, buyFreeze,
+    COMBO_STEP, COMBO_BONUS, COMBO_MAX, DIFF_MIN, DIFF_MAX,
+    comboMultiplier, comboBreakdown, difficultyWeight, sessionXp, sessionXpInfo, survivalXp,
     pickGhost, ghostScoreAt, ghostMeter, timeRingState, GHOST_METER_RANGE,
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     cellFreshness, masteryView, MASTERY_FRESH_DAYS, MASTERY_STALE_DAYS,

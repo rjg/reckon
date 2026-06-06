@@ -576,6 +576,7 @@
   /* results: XP + ghost outcome */
   #res-extra{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px;}
   .res-xp{background:rgb(var(--amber-rgb) / .14);color:var(--amber-ink);font-weight:700;font-size:14px;padding:7px 13px;border-radius:10px;border:1px solid rgb(var(--amber-rgb) / .3);}
+  .res-xp em{font-style:normal;color:var(--muted);font-weight:500;margin-left:5px;}
   .res-ghost{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;padding:7px 13px;border-radius:10px;}
   .res-ghost.win{background:rgb(var(--ok-rgb) / .14);color:var(--ok-ink);border:1px solid rgb(var(--ok-rgb) / .3);}
   .res-ghost.lose{background:rgb(var(--amber-rgb) / .12);color:var(--amber-ink);border:1px solid rgb(var(--amber-rgb) / .28);}
@@ -1275,7 +1276,7 @@ if(typeof Z==='undefined'){
    IndexedDB glue below calls into these; tests exercise them directly. */
 const { dayKey, parseKey, addDays,
         dayCounts, currentStreak, bestStreak, reconcileFreezes,
-        defaultProgress, normalizeProgress, xpForSession, awardXp,
+        defaultProgress, normalizeProgress, awardXp, sessionXp, sessionXpInfo, survivalXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt, ghostMeter, timeRingState,
         masteryBaseline, masteryGrid, cellFreshness, masteryView, opStats, accuracy, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
@@ -1727,11 +1728,13 @@ async function endGame(){
     rate:probs.length/(game.elapsedMs/1000),
     config:game.config,
   };
-  /* XP: 1 per solved problem (the score). awardXp only mutates progress in
-     memory, so compute it up front — the results sheet shows it even if the
-     persistence below fails. */
+  /* XP: a base 1 per solved problem, lifted by the in-run combo (clean streaks)
+     and the difficulty of the ranges — so playing sharp on hard numbers pays more
+     than grinding Easy. awardXp only mutates progress in memory, so compute it up
+     front — the results sheet shows it (and its breakdown) even if the save fails. */
   const rankBefore=rankForXp(progress.xpLifetime);   // snapshot to spot a rank-up
-  const xpEarned=awardXp(progress,xpForSession(session));
+  const xpInfo=sessionXpInfo(probs,game.config);
+  const xpEarned=awardXp(progress,xpInfo.xp);
   bumpStats(probs);   // running totals (problem count + fastest correct) for trophies
   const rankAfter=rankForXp(progress.xpLifetime);
   const ghost=game.ghost
@@ -1765,7 +1768,7 @@ async function endGame(){
   $('answer').blur();
   showScreen('home');
   await renderHome().catch(err=>console.error('endGame: renderHome failed',err));
-  openResults(session,probs,{xpEarned,ghost});
+  openResults(session,probs,{xpEarned,ghost,xpInfo});
 }
 
 function quitGame(){
@@ -1874,7 +1877,7 @@ async function endSurvival(cause){
      write below fails (quota / Private Browsing) */
   const rankBefore=rankForXp(progress.xpLifetime);   // survival XP can rank you up
   const res=recordSurvival(progress,streak);
-  const xpEarned=awardXp(progress,streak);    // 1 XP per solve, like a normal game
+  const xpEarned=awardXp(progress,survivalXp(streak,game.config));   // combo-weighted, like a normal game
   bumpStats(probs);                           // volume / fastest-answer trophies
   const rankAfter=rankForXp(progress.xpLifetime);
   try{
@@ -1970,7 +1973,17 @@ function openResults(session,problems,extra){
   const ex=$('res-extra');
   let xh='';
   if(extra){
-    if(extra.xpEarned) xh+='<span class="res-xp">+'+extra.xpEarned+' XP</span>';
+    if(extra.xpEarned){
+      let note='';                              // explain the bonus so the mechanic is learnable
+      const xi=extra.xpInfo;
+      if(xi){
+        const bits=[];
+        if(xi.bestMult>1.0001) bits.push('combo ×'+(+xi.bestMult.toFixed(2))+' ('+xi.bestRun+' in a row)');
+        if(xi.diff>1.0001) bits.push('difficulty ×'+(+xi.diff.toFixed(2)));
+        if(bits.length) note=' <em>'+bits.join(' · ')+'</em>';
+      }
+      xh+='<span class="res-xp">+'+extra.xpEarned+' XP'+note+'</span>';
+    }
     if(extra.ghost){
       const d=extra.ghost.your-extra.ghost.ghost;
       xh+='<span class="res-ghost '+(d>=0?'win':'lose')+'">'+GHOST_SVG+

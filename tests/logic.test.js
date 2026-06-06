@@ -159,6 +159,56 @@ test('normalizeProgress repairs partial/garbage records', () => {
   assert.deepEqual(fixed.freezeDays, {});
 });
 
+/* ===================== skill-weighted XP ===================== */
+// minimal configs for difficultyWeight
+const cfgEasy = { ops: { add: true, sub: true, mul: true, div: true }, add: { min1: 1, max1: 20, min2: 1, max2: 20 }, mul: { min1: 1, max1: 9, min2: 1, max2: 9 } };
+const cfgNormal = { ops: { add: true, sub: true, mul: true, div: true }, add: { min1: 2, max1: 100, min2: 2, max2: 100 }, mul: { min1: 2, max1: 12, min2: 2, max2: 100 } };
+const cfgHard = { ops: { add: true, sub: true, mul: true, div: true }, add: { min1: 10, max1: 100, min2: 10, max2: 100 }, mul: { min1: 2, max1: 20, min2: 2, max2: 100 } };
+const cfgTrivial = { ops: { add: true, sub: true, mul: true, div: true }, add: { min1: 1, max1: 3, min2: 1, max2: 3 }, mul: { min1: 1, max1: 3, min2: 1, max2: 3 } };
+const probs = (cleanFlags) => cleanFlags.map(ok => ({ wasCorrect: !!ok }));
+
+test('comboMultiplier ramps every COMBO_STEP and caps at +COMBO_MAX', () => {
+  assert.equal(Z.comboMultiplier(0), 1.0);            // a fresh streak is neutral
+  assert.equal(Z.comboMultiplier(Z.COMBO_STEP - 1), 1.0);
+  assert.ok(Math.abs(Z.comboMultiplier(Z.COMBO_STEP) - (1 + Z.COMBO_BONUS)) < 1e-9);
+  assert.ok(Math.abs(Z.comboMultiplier(5 * Z.COMBO_STEP) - (1 + Z.COMBO_MAX)) < 1e-9);  // exactly at cap
+  assert.equal(Z.comboMultiplier(10000), 1 + Z.COMBO_MAX);   // never past the cap
+  assert.equal(Z.comboMultiplier(-3), 1.0);                   // garbage clamps
+});
+
+test('sessionXp: a flawless run out-earns a fumbly one of equal length, and never dips below the score', () => {
+  const n = 40;
+  const flawless = probs(Array(n).fill(true));
+  const fumbly = probs(Array.from({ length: n }, (_, i) => i % 3 !== 0));  // every 3rd is a miss → combos keep resetting
+  const xpFlawless = Z.sessionXp(flawless, cfgEasy);
+  const xpFumbly = Z.sessionXp(fumbly, cfgEasy);
+  assert.ok(xpFlawless > xpFumbly, 'clean play earns more: ' + xpFlawless + ' vs ' + xpFumbly);
+  // base is 1/problem, difficulty >= 1, combo only adds — so XP is never below the completed count
+  assert.ok(xpFumbly >= n);
+  assert.ok(Z.sessionXp(probs(Array(n).fill(false)), cfgEasy) >= n);   // all fumbles still bank base 1 each
+  // the breakdown reports the longest clean run and its peak multiplier
+  const info = Z.sessionXpInfo(flawless, cfgEasy);
+  assert.equal(info.bestRun, n);
+  assert.ok(info.bestMult > 1 && info.comboBonus > 0);
+});
+
+test('difficultyWeight floors at 1.0, rises with operand magnitude, and caps at DIFF_MAX', () => {
+  assert.equal(Z.difficultyWeight({}), Z.DIFF_MIN);              // no config → floor
+  assert.equal(Z.difficultyWeight(cfgTrivial), Z.DIFF_MIN);     // tiny ranges clamp to the floor
+  assert.ok(Z.difficultyWeight(cfgEasy) >= 1.0 && Z.difficultyWeight(cfgEasy) <= 1.05);
+  assert.ok(Z.difficultyWeight(cfgHard) > Z.difficultyWeight(cfgEasy));   // harder pays more than easy
+  assert.ok(Z.difficultyWeight(cfgNormal) > 1.1 && Z.difficultyWeight(cfgNormal) <= Z.DIFF_MAX);
+  const brutal = { ops: { add: true }, add: { min1: 50, max1: 999, min2: 50, max2: 999 }, mul: {} };
+  assert.equal(Z.difficultyWeight(brutal), Z.DIFF_MAX);         // never past the cap
+});
+
+test('survivalXp applies the combo curve over the streak (super-linear, difficulty-weighted)', () => {
+  assert.equal(Z.survivalXp(0, cfgEasy), 0);
+  assert.equal(Z.survivalXp(Z.COMBO_STEP, cfgEasy), Z.COMBO_STEP);  // first step all ×1.0 on easy
+  assert.ok(Z.survivalXp(40, cfgEasy) > 40);                       // deep runs out-earn 1/solve
+  assert.ok(Z.survivalXp(40, cfgHard) > Z.survivalXp(40, cfgEasy)); // hard ranges pay more
+});
+
 /* ===================== ghost ===================== */
 test('pickGhost returns the best-rate session for the matching preset only', () => {
   const sessions = [
