@@ -1278,7 +1278,7 @@ const { dayKey, parseKey, addDays,
         dayCounts, currentStreak, bestStreak, reconcileFreezes,
         defaultProgress, normalizeProgress, awardXp, sessionXp, sessionXpInfo, survivalXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt, ghostMeter, timeRingState,
-        masteryBaseline, masteryGrid, cellFreshness, masteryView, opStats, accuracy, computeWeakFacts, genProblem, OP_ORDER,
+        masteryBaseline, masteryGrid, cellFreshness, masteryView, masteryProgress, opStats, accuracy, computeWeakFacts, genProblem, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
         survivalTimeLimit, recordSurvival,
         gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_XP,
@@ -2554,22 +2554,14 @@ function computeCheapStats(sessions,now){
   };
 }
 function computeMasteryStats(problems,now){
-  if(!problems||!problems.length) return {strongFacts:0,seenFacts:0,opsWithStrong:0,tableMastered:false};
-  const baseline=masteryBaseline(problems);
-  let strong=0, seen=0, opsStrong=0, tableMastered=false;
-  for(const pair of MASTERY_OPS){
-    const g=masteryGrid(problems,pair[0],12,baseline);
-    let opStrong=0, reachable=0;
-    for(let a=1;a<=12;a++) for(let b=a;b<=12;b++){
-      reachable++;
-      const c=g.cells[a-1][b-1];
-      if(c) seen++;
-      if(masteryView(c,now).displayLevel===3){ strong++; opStrong++; }
-    }
-    if(opStrong>0) opsStrong++;
-    if(opStrong===reachable) tableMastered=true;
-  }
-  return {strongFacts:strong, seenFacts:seen, opsWithStrong:opsStrong, tableMastered};
+  /* one pure scan (app-logic.js) feeds every mastery emblem: the count tiers, the
+     grid-% campaign (gridStrong/gridReachable), and the table capstones. */
+  const mp=masteryProgress(problems||[],now,12);
+  return {
+    strongFacts:mp.strong, seenFacts:mp.seen, opsWithStrong:mp.opsWithStrong,
+    tableMastered:mp.tablesGreen>0,
+    gridStrong:mp.strong, gridReachable:mp.reachable, tablesGreen:mp.tablesGreen,
+  };
 }
 /* lifetime problem count + fastest correct solve, from a full scan (one-time
    backfill on upgrade, and the authoritative refresh when the case opens). */
@@ -3100,11 +3092,15 @@ async function renderMastery(){
   for(const x of grids){ tot.seen+=x.t.seen; tot.strong+=x.t.strong; tot.weak+=x.t.weak; tot.tending+=x.t.tending; }
   const pct=tot.seen?Math.round(tot.strong/tot.seen*100):0;
   const sub2=[tot.weak+' weak',tot.tending?tot.tending+' need tending':''].filter(Boolean).join(' · ');
+  /* the green-the-grid campaign: strong cells out of ALL reachable (4 ops × 78) */
+  const reachable=grids.length*78, gridPct=Math.round(tot.strong/reachable*100);
+  const nextTier=[[50,'In Bloom'],[75,'Verdant'],[100,'Evergreen']].find(t=>gridPct<t[0]);
+  const nextLabel=nextTier?'next: '+nextTier[1]+' '+nextTier[0]+'%':'every cell green';
   summary.innerHTML='<div class="stat-cards">'+
-    '<div class="stat-card accent"><div class="k">Strong</div><div class="v">'+pct+'%</div>'+
-      '<div class="s">of facts practiced</div></div>'+
-    '<div class="stat-card"><div class="k">Facts seen</div><div class="v">'+tot.seen+'</div>'+
-      '<div class="s">'+sub2+'</div></div>'+
+    '<div class="stat-card accent"><div class="k">Grid green</div><div class="v">'+gridPct+'%</div>'+
+      '<div class="s">'+tot.strong+' of '+reachable+' · '+nextLabel+'</div></div>'+
+    '<div class="stat-card"><div class="k">Strong</div><div class="v">'+pct+'%</div>'+
+      '<div class="s">of '+tot.seen+' seen'+(sub2?' · '+sub2:'')+'</div></div>'+
   '</div>';
   let h='';
   for(const x of grids){
@@ -3114,11 +3110,14 @@ async function renderMastery(){
        renderGrid(x.g,now);
   }
   body.innerHTML=h;
-  /* earn mastery emblems off the grids we just built (78 reachable cells per op) */
+  /* earn mastery emblems off the grids we just built (78 reachable cells per op):
+     count tiers, the grid-% campaign, and the table capstones */
+  const tablesGreen=grids.filter(x=>x.t.strong===78).length;
   const fresh=reconcileTrophies(progress,{
     strongFacts:tot.strong, seenFacts:tot.seen,
     opsWithStrong:grids.filter(x=>x.t.strong>0).length,
-    tableMastered:grids.some(x=>x.t.strong===78),
+    tableMastered:tablesGreen>0,
+    gridStrong:tot.strong, gridReachable:reachable, tablesGreen,
   },Date.now());
   if(fresh.length){
     Store.saveProgress(progress).catch(err=>console.error('trophy save failed',err));

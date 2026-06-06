@@ -444,6 +444,35 @@
     return { level, displayLevel, decay, tending, stage: f.stage, days: f.days };
   }
 
+  /* ---- mastery progress (the "green the grid" campaign) ----
+     Fold all four ops into one progress read: how many cells are strong (after
+     decay) out of every REACHABLE cell — the upper triangle per op (12·13/2 = 78,
+     ×4 = 312 at maxN=12). The denominator is ALL reachable cells (grey ones count
+     against you), so 100% means a fully-tended garden — a real completion target
+     that decay keeps alive. `tablesGreen` counts ops whose whole table is green.
+     Pure (caller passes `now`); the glue's Trophy Case + Mastery sheet both read it. */
+  function masteryProgress(problems, nowMs, maxN) {
+    maxN = maxN || 12;
+    const baseline = masteryBaseline(problems || []);
+    let strong = 0, seen = 0, reachable = 0, opsWithStrong = 0, tablesGreen = 0;
+    const perOp = [];
+    for (const op of OP_ORDER) {
+      const g = masteryGrid(problems || [], op, maxN, baseline);
+      let s = 0, sn = 0, reach = 0;
+      for (let i = 0; i < maxN; i++) for (let j = i; j < maxN; j++) {   // i<=j: the folded upper triangle
+        reach++;
+        const c = g.cells[i][j];
+        if (c) sn++;
+        if (masteryView(c, nowMs).displayLevel === 3) s++;
+      }
+      strong += s; seen += sn; reachable += reach;
+      if (s > 0) opsWithStrong++;
+      if (s === reach) tablesGreen++;
+      perOp.push({ op, strong: s, seen: sn, reachable: reach, full: s === reach });
+    }
+    return { strong, seen, reachable, pct: reachable ? strong / reachable : 0, opsWithStrong, tablesGreen, baseline, perOp };
+  }
+
   /* ---- per-operation aggregate (results & stats tables) ----
      One row per operation that occurred, in OP_ORDER; the row with the
      highest average solve time is flagged `slowest` (first one wins ties). */
@@ -737,6 +766,7 @@
     HIGH_SCORE: 100, SURVIVAL: 25,
     VOL: [100, 1000, 10000], STRONG: [25, 100],
     DAY_STREAK: [7, 30, 100], GAUNT_STREAK: 7, GOLDS: 10,
+    GRID_PCT: [50, 75, 100], GRID_REACHABLE: 312,   // "green the grid" tiers (% of all reachable cells)
   };
   const fastWithin = (s, ms) => (s.fastestCorrectMs > 0 && s.fastestCorrectMs <= ms);
   /* one trophy per rank above Novice (Novice xp 0 is the START, not an unlock). */
@@ -799,6 +829,17 @@
     { id: 'mas-allops', group: 'mastery', icon: 'star', name: 'Polymath',
       desc: 'Be strong in all four operations', reached: s => (s.opsWithStrong || 0) >= 4,
       progress: s => ({ cur: Math.min(s.opsWithStrong || 0, 4), target: 4 }) },
+    // mastery — green-the-grid campaign (% of ALL reachable cells; decay keeps it alive)
+    ...TROPHY.GRID_PCT.map((p, i) => ({
+      id: 'mas-grid' + p, group: 'mastery', icon: ['sprout', 'sprout', 'star'][i],
+      name: ['In Bloom', 'Verdant', 'Evergreen'][i],
+      desc: p >= 100 ? 'Turn the entire grid green' : 'Turn ' + p + '% of the grid green',
+      reached: s => (s.gridReachable || 0) > 0 && (s.gridStrong || 0) / s.gridReachable >= p / 100,
+      progress: s => { const t = Math.round(p / 100 * (s.gridReachable || TROPHY.GRID_REACHABLE)); return { cur: Math.min(s.gridStrong || 0, t), target: t }; },
+    })),
+    { id: 'mas-alltables', group: 'mastery', icon: 'grid', name: 'Grandmaster',
+      desc: 'Make all four tables fully green', reached: s => (s.tablesGreen || 0) >= 4,
+      progress: s => ({ cur: Math.min(s.tablesGreen || 0, 4), target: 4 }) },
     // secret — hidden until earned (the surprise)
     { id: 'sec-flawless', group: 'secret', icon: 'sparkle', name: 'Flawless', secret: true,
       desc: 'Finish a ' + TROPHY.PERFECT_MIN + '+ problem game with no mistakes', reached: s => !!s.perfectGame },
@@ -1052,7 +1093,7 @@
     comboMultiplier, comboBreakdown, difficultyWeight, sessionXp, sessionXpInfo, survivalXp,
     pickGhost, ghostScoreAt, ghostMeter, timeRingState, GHOST_METER_RANGE,
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
-    cellFreshness, masteryView, MASTERY_FRESH_DAYS, MASTERY_STALE_DAYS,
+    cellFreshness, masteryView, masteryProgress, MASTERY_FRESH_DAYS, MASTERY_STALE_DAYS,
     opStats, accuracy, computeWeakFacts,
     recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
     gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_RANK, MEDAL_TIERS, MEDAL_XP,

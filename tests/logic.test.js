@@ -335,6 +335,38 @@ test('masteryView leaves ok/weak/unseen untouched, and never wilts un-timestampe
 });
 
 /* ===================== opStats ===================== */
+test('masteryProgress aggregates strong/reachable across all four ops', () => {
+  // reachable is the folded upper triangle per op (12·13/2 = 78) × 4 ops = 312
+  const now = 1_000_000_000_000;
+  const empty = Z.masteryProgress([], now, 12);
+  assert.equal(empty.reachable, 312);
+  assert.equal(empty.strong, 0);
+  assert.equal(empty.pct, 0);
+  assert.equal(empty.tablesGreen, 0);
+  // drilling one fact fast + clean makes exactly one cell strong (pct between 0 and 1)
+  const drill = [];
+  for (let i = 0; i < 6; i++) drill.push({ operation: TIMES, operand1: 3, operand2: 4, correctAnswer: 12, wasCorrect: true, msToAnswer: 700, timestamp: now });
+  const mp = Z.masteryProgress(drill, now, 12);
+  assert.ok(mp.strong >= 1, 'the drilled fact reads strong');
+  assert.equal(mp.reachable, 312);
+  assert.ok(mp.pct > 0 && mp.pct < 1);
+  assert.ok(mp.tablesGreen === 0);              // one cell is not a whole table
+});
+
+test('grid-completion + all-tables trophies fire off the grid stats', () => {
+  const ids = s => new Set(Z.evaluateTrophies(s));
+  // no false-earn before any scan has run (gridReachable 0)
+  assert.deepEqual([...ids({ gridStrong: 0, gridReachable: 0 })].filter(x => x.startsWith('mas-grid')), []);
+  let s = ids({ gridStrong: 156, gridReachable: 312 });        // exactly 50%
+  assert.ok(s.has('mas-grid50') && !s.has('mas-grid75'));
+  s = ids({ gridStrong: 234, gridReachable: 312 });            // 75%
+  assert.ok(s.has('mas-grid50') && s.has('mas-grid75') && !s.has('mas-grid100'));
+  s = ids({ gridStrong: 312, gridReachable: 312 });            // a fully-green grid
+  assert.ok(s.has('mas-grid100'));
+  assert.ok(!ids({ tablesGreen: 3 }).has('mas-alltables'));
+  assert.ok(ids({ tablesGreen: 4 }).has('mas-alltables'));
+});
+
 test('opStats aggregates per op, in OP_ORDER, skipping ops with no data', () => {
   const problems = [
     { operation: PLUS, msToAnswer: 1000, wasCorrect: true },
