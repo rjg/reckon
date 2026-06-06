@@ -1278,8 +1278,8 @@ const { dayKey, parseKey, addDays,
         dayCounts, currentStreak, bestStreak, reconcileFreezes,
         defaultProgress, normalizeProgress, awardXp, sessionXp, sessionXpInfo, survivalXp,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt, ghostMeter, timeRingState,
-        masteryBaseline, masteryGrid, cellFreshness, masteryView, masteryProgress, opStats, accuracy, computeWeakFacts, genProblem, OP_ORDER,
-        buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
+        masteryBaseline, masteryGrid, cellFreshness, masteryView, masteryProgress, opStats, accuracy, computeWeakFacts, genProblem, classifyAnswer, OP_ORDER,
+        buildGauntlet, gauntletStreak, recordGauntletClear, shuffle, mulberry32,
         survivalTimeLimit, recordSurvival,
         gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_XP,
         RANKS, rankForXp, bestGauntletStreak, TROPHY, TROPHY_DEFS, trophyCounts, reconcileTrophies,
@@ -1457,7 +1457,7 @@ function anyOpEnabled(c){return c.ops.add||c.ops.sub||c.ops.mul||c.ops.div;}
 
 /* problem queue — pre-generated so there is never a frame hitch */
 let queue=[];
-function fillQueue(c){ while(queue.length<24) queue.push(genProblem(c)); }
+function fillQueue(c){ while(queue.length<24){ const p=genProblem(c); if(!p) break; queue.push(p); } }
 function nextFromQueue(c){ if(queue.length<6) fillQueue(c); return queue.shift(); }
 
 /* ---------- router ---------- */
@@ -1590,7 +1590,7 @@ const BOLT_SVG='<svg width="16" height="16" viewBox="0 0 24 24" fill="currentCol
 function medalSVG(size){ size=size||20; return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>'; }
 const MEDAL_LABEL={gold:'Gold',silver:'Silver',bronze:'Bronze'};
 const fmtS=ms=>(ms/1000).toFixed(1)+'s';   // ms → "12.4s"
-function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+/* mulberry32 (seedable PRNG) lives in app-logic.js, shared with the tests */
 function seedFromKey(k){ return Number(String(k).replace(/-/g,'')); }
 let gauntletToday=null;   // { key, facts } — today's snapshot, set in renderHome
 
@@ -1646,22 +1646,21 @@ function tick(){
 function onAnswerInput(){
   if(!game||game.ended) return;
   const inp=$('answer');
-  const v=inp.value.replace(/[^0-9]/g,'');
-  if(v!==inp.value) inp.value=v;
-  if(v==='') return;
-  const num=Number(v), correct=game.current.correctAnswer;
-  if(num===correct){
-    commitProblem(); advance();
-  }else if(v.length>=String(correct).length){
-    if(game.mode==='survival'){
-      /* sudden death: a complete, wrong entry ends the run (logged as the miss) */
-      game.wrongAnswer=num; commitProblem();
-      endSurvival('wrong').catch(err=>console.error('endSurvival failed',err));
-      return;
-    }
-    /* a complete-looking but wrong entry — logged silently for the diagnostic */
-    if(game.wrongAnswer===null) game.wrongAnswer=num;
+  /* classifyAnswer (app-logic.js, unit-tested) is the live correct/wrong/incomplete
+     decision; here we just react to it and sync the field to the sanitized digits. */
+  const {digits,status}=classifyAnswer(inp.value,game.current.correctAnswer);
+  if(digits!==inp.value) inp.value=digits;
+  if(status==='empty'||status==='incomplete') return;
+  if(status==='correct'){ commitProblem(); advance(); return; }
+  /* status==='wrong' — a complete-looking but wrong entry */
+  if(game.mode==='survival'){
+    /* sudden death: a complete, wrong entry ends the run (logged as the miss) */
+    game.wrongAnswer=Number(digits); commitProblem();
+    endSurvival('wrong').catch(err=>console.error('endSurvival failed',err));
+    return;
   }
+  /* normal/gauntlet: log the miss silently for the diagnostic, keep playing */
+  if(game.wrongAnswer===null) game.wrongAnswer=Number(digits);
 }
 
 function commitProblem(){
@@ -1903,6 +1902,7 @@ async function endSurvival(cause){
 /* survival completion — reuses the results sheet, led by the streak you reached. */
 function openSurvivalResults(probs,info){
   $('res-medal').hidden=true;
+  $('res-acc').hidden=true;   // survival leads with the streak, not an accuracy line (and don't show a prior game's)
   $('res-score-label').textContent='Streak: ';
   $('res-rate-label').textContent='';
   $('res-score').textContent=info.streak;

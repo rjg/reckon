@@ -126,6 +126,26 @@
     return rng() < 0.5 ? makeProblem(DIV, prod, x, y) : makeProblem(DIV, prod, y, x);
   }
 
+  /* ---- answer classification (the keystroke auto-advance state machine) ----
+     The game has no submit button: every keystroke is judged live. Strip the
+     field to digits, then decide where the typed value stands vs the answer:
+       · 'empty'      — nothing typed yet
+       · 'correct'    — equals the answer (advance)
+       · 'wrong'      — as long as the answer but not equal (a complete miss)
+       · 'incomplete' — shorter than the answer and not equal yet (keep typing)
+     Answers are non-negative integers by construction, so digit-length is a sound
+     "is this entry complete" proxy. Pure, so the glue's onAnswerInput is a thin
+     shell over a tested decision; returns the sanitized digits too, so the caller
+     can write them back (dropping any non-digit keystroke). */
+  function classifyAnswer(raw, correctAnswer) {
+    const digits = String(raw == null ? '' : raw).replace(/[^0-9]/g, '');
+    if (digits === '') return { digits: digits, status: 'empty' };
+    const status = Number(digits) === correctAnswer ? 'correct'
+      : digits.length >= String(correctAnswer).length ? 'wrong'
+      : 'incomplete';
+    return { digits: digits, status: status };
+  }
+
   /* ---- streak ---- */
   /* date string -> count of completed games that local day */
   function dayCounts(sessions) {
@@ -590,6 +610,18 @@
       const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
     }
     return arr;
+  }
+  /* mulberry32 — a tiny seedable PRNG: a 0..1 thunk shaped exactly like
+     Math.random, so it drops into anything that takes an `rng`. Makes the daily
+     gauntlet's cold-start fill reproducible per day (index.html seeds it by date)
+     and gives the tests a deterministic stream. */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
   }
   function buildGauntlet(problems, nowMs, rng, opts) {
     opts = opts || {};
@@ -1125,7 +1157,7 @@
     GAUNTLET_SIZE, GAUNTLET_REWARD, GAUNTLET_WINDOW_DAYS,
     SURVIVAL_START_MS, SURVIVAL_FLOOR_MS, SURVIVAL_STEP_MS, survivalTimeLimit, recordSurvival,
     dayKey, parseKey, addDays,
-    answerFor, canonFact, factKey, genProblem,
+    answerFor, canonFact, factKey, genProblem, classifyAnswer,
     dayCounts, daySatisfied, currentStreak, bestStreak, reconcileFreezes,
     defaultProgress, normalizeProgress, xpForSession, awardXp, canBuyFreeze, buyFreeze,
     COMBO_STEP, COMBO_BONUS, COMBO_MAX, DIFF_MIN, DIFF_MAX,
@@ -1134,7 +1166,7 @@
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     cellFreshness, masteryView, masteryProgress, MASTERY_FRESH_DAYS, MASTERY_STALE_DAYS,
     opStats, accuracy, computeWeakFacts,
-    recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear, shuffle,
+    recentProblems, buildGauntlet, gauntletStreak, recordGauntletClear, shuffle, mulberry32,
     gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_RANK, MEDAL_TIERS, MEDAL_XP,
     RANKS, rankForXp, bestGauntletStreak,
     TROPHY, TROPHY_DEFS, TROPHY_TOTAL, TROPHY_BY_ID, evaluateTrophies, reconcileTrophies, trophyCounts,

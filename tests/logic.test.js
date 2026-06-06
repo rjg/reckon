@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Z = require('../app-logic.js');
 
-const { PLUS, MINUS, TIMES, DIV } = Z;
+const { PLUS, MINUS, TIMES, DIV, mulberry32 } = Z;   // mulberry32: seedable PRNG, shared with the app
 
 /* ---- helpers ---- */
 // build a sessions array: N games on each given dayKey
@@ -282,6 +282,33 @@ test('masteryGrid maps ÷ onto divisor/quotient and grades levels', () => {
   assert.equal(cell.level, 3); // accuracy 1.0, avg 800 <= 1.3*1000
 });
 
+test('gridFactors maps every op to its fluency family (factors / addends / quotient / difference)', () => {
+  assert.deepEqual(Z.gridFactors({ operation: TIMES, operand1: 7, operand2: 8, correctAnswer: 56 }), [7, 8]);  // the two factors
+  assert.deepEqual(Z.gridFactors({ operation: DIV,   operand1: 56, operand2: 7, correctAnswer: 8 }), [7, 8]);  // divisor, quotient
+  assert.deepEqual(Z.gridFactors({ operation: PLUS,  operand1: 7, operand2: 8, correctAnswer: 15 }), [7, 8]);  // the two addends
+  assert.deepEqual(Z.gridFactors({ operation: MINUS, operand1: 15, operand2: 8, correctAnswer: 7 }), [8, 7]);  // subtrahend, difference
+});
+
+test('masteryGrid folds + onto its addends and − onto subtrahend/difference', () => {
+  // 7+8 and 8+7 fold to the (7,8) cell
+  const plus = [
+    { operation: PLUS, operand1: 7, operand2: 8, correctAnswer: 15, wasCorrect: true, msToAnswer: 900 },
+    { operation: PLUS, operand1: 8, operand2: 7, correctAnswer: 15, wasCorrect: true, msToAnswer: 1000 },
+  ];
+  const gp = Z.masteryGrid(plus, PLUS, 12, 1000);
+  assert.equal(gp.cells[6][7].count, 2);   // (7,8)
+  assert.equal(gp.cells[7][6], null);      // lower triangle stays empty (folded)
+  // 15−8=7 → (subtrahend 8, difference 7) and 15−7=8 → (7,8) both land in the (7,8) cell
+  const minus = [
+    { operation: MINUS, operand1: 15, operand2: 8, correctAnswer: 7, wasCorrect: true, msToAnswer: 800 },
+    { operation: MINUS, operand1: 15, operand2: 7, correctAnswer: 8, wasCorrect: false, msToAnswer: 3000 },
+  ];
+  const gm = Z.masteryGrid(minus, MINUS, 12, 1000);
+  const c = gm.cells[6][7];
+  assert.equal(c.count, 2);
+  assert.equal(c.correct, 1);              // one of the two was a miss
+});
+
 test('cellLevel grades weak (inaccurate or slow), ok, strong', () => {
   assert.equal(Z.cellLevel({ count: 0 }, 1000), 0);
   assert.equal(Z.cellLevel({ count: 5, correct: 2, totalMs: 1600 }, 1000), 1); // 40% accuracy
@@ -477,6 +504,21 @@ test('computeWeakFacts honors the topN cap', () => {
   assert.equal(weak.length, 3);
 });
 
+test('computeWeakFacts treats a fact never solved correctly as a slow (4s) solve so it still ranks', () => {
+  const fact = (op, o1, o2, ok, ms) =>
+    ({ operation: op, operand1: o1, operand2: o2, wasCorrect: ok, msToAnswer: ms });
+  const key = f => f.operation + ':' + f.operand1 + ':' + f.operand2;
+  const problems = [
+    fact(TIMES, 2, 3, true, 800), fact(TIMES, 2, 3, true, 820),   // fast/clean → low baseline, anyCorrect=true
+    fact(TIMES, 8, 8, false, 0), fact(TIMES, 8, 8, false, 0),     // count 2 but ZERO correct → the 4000ms fallback
+  ];
+  const weak = Z.computeWeakFacts(problems, 10);
+  assert.equal(key(weak[0]), '×:8:8');                 // 100% miss + 4s median outranks the easy fact
+  const f88 = weak.find(f => f.operand1 === 8 && f.operand2 === 8);
+  assert.equal(f88._missRate, 1);
+  assert.equal(f88._medMs, 4000);                      // the documented "never solved" yardstick
+});
+
 /* ===================== genProblem (invariants) ===================== */
 test('genProblem always yields a well-formed, in-range, exactly-solvable problem', () => {
   // a wide config that exercises every op and a range that admits 1
@@ -549,15 +591,38 @@ test('genProblem returns null when no operation is enabled (no silent fallthroug
   assert.equal(Z.genProblem(cfg, Math.random), null);   // not a bogus division
 });
 
+/* ===================== classifyAnswer (auto-advance state machine) ===================== */
+test('classifyAnswer judges a live keystroke as empty / incomplete / wrong / correct', () => {
+  // empty field
+  assert.deepEqual(Z.classifyAnswer('', 12), { digits: '', status: 'empty' });
+  assert.deepEqual(Z.classifyAnswer(null, 12), { digits: '', status: 'empty' });
+  // a prefix of the answer is still incomplete — keep typing, no miss
+  assert.deepEqual(Z.classifyAnswer('1', 12), { digits: '1', status: 'incomplete' });
+  // a full-length non-match is a complete miss
+  assert.deepEqual(Z.classifyAnswer('13', 12), { digits: '13', status: 'wrong' });
+  // exact match advances
+  assert.deepEqual(Z.classifyAnswer('12', 12), { digits: '12', status: 'correct' });
+  // overshoot (longer than the answer, not equal) reads as wrong, not incomplete
+  assert.equal(Z.classifyAnswer('123', 12).status, 'wrong');
+});
+
+test('classifyAnswer strips non-digits and reports the sanitized value to write back', () => {
+  assert.deepEqual(Z.classifyAnswer('1a2', 12), { digits: '12', status: 'correct' });
+  assert.deepEqual(Z.classifyAnswer('-5', 5), { digits: '5', status: 'correct' });  // the field can never hold a sign
+  assert.equal(Z.classifyAnswer(' 7 ', 7).status, 'correct');
+});
+
+test('classifyAnswer handles a 0 answer and the single-digit leading-zero edge', () => {
+  // answer 0: a typed 0 is correct; any other single digit is a complete miss
+  assert.equal(Z.classifyAnswer('0', 0).status, 'correct');
+  assert.equal(Z.classifyAnswer('5', 0).status, 'wrong');
+  // answer 5: typing "0" first is a complete (single-digit) miss; "05" then reads correct.
+  // This documents WHY a leading zero before a single-digit answer trips the miss flag.
+  assert.equal(Z.classifyAnswer('0', 5).status, 'wrong');
+  assert.equal(Z.classifyAnswer('05', 5).status, 'correct');
+});
+
 /* ---- daily gauntlet ---- */
-function mulberry32(a) {
-  return function () {
-    a |= 0; a = a + 0x6D2B79F5 | 0;
-    let t = Math.imul(a ^ a >>> 15, 1 | a);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
 // problem records for one fact: specs is an array of [ms, wasCorrect]
 function recsFor(op, o1, o2, specs, baseTs) {
   return specs.map(([ms, ok], i) => ({
