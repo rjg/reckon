@@ -197,12 +197,15 @@ test('sessionXp: a flawless run out-earns a fumbly one of equal length, and neve
   assert.ok(info.bestMult > 1 && info.comboBonus > 0);
 });
 
-test('difficultyWeight floors at 1.0, rises with operand magnitude, and caps at DIFF_MAX', () => {
+test('difficultyWeight equalizes XP/minute: floor at Easy, ~proportional to solve-time, capped', () => {
   assert.equal(Z.difficultyWeight({}), Z.DIFF_MIN);              // no config → floor
-  assert.equal(Z.difficultyWeight(cfgTrivial), Z.DIFF_MIN);     // tiny ranges clamp to the floor
-  assert.ok(Z.difficultyWeight(cfgEasy) >= 1.0 && Z.difficultyWeight(cfgEasy) <= 1.05);
-  assert.ok(Z.difficultyWeight(cfgHard) > Z.difficultyWeight(cfgEasy));   // harder pays more than easy
-  assert.ok(Z.difficultyWeight(cfgNormal) > 1.1 && Z.difficultyWeight(cfgNormal) <= Z.DIFF_MAX);
+  assert.equal(Z.difficultyWeight(cfgTrivial), Z.DIFF_MIN);     // easier than Easy clamps to the floor
+  assert.ok(Math.abs(Z.difficultyWeight(cfgEasy) - 1.0) < 0.02); // the Easy preset IS the 1.0 anchor
+  assert.ok(Z.difficultyWeight(cfgHard) > Z.difficultyWeight(cfgEasy));   // harder pays more per problem
+  // the whole point: weight ≈ modeled solve-time ÷ the Easy baseline, so (solves/min)×weight is ~constant
+  const ratio = Z.estSolveMs(cfgNormal) / Z.estSolveMs(cfgEasy);
+  assert.ok(Math.abs(Z.difficultyWeight(cfgNormal) - ratio) < 1e-9, 'unclamped weight = time ratio');
+  assert.ok(Z.difficultyWeight(cfgNormal) > 1.8 && Z.difficultyWeight(cfgNormal) < 2.6); // Normal ~2× (offsets ~half the throughput)
   const brutal = { ops: { add: true }, add: { min1: 50, max1: 999, min2: 50, max2: 999 }, mul: {} };
   assert.equal(Z.difficultyWeight(brutal), Z.DIFF_MAX);         // never past the cap
 });

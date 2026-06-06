@@ -38,7 +38,19 @@
   const COMBO_STEP = 5;       // every N clean solves in a row...
   const COMBO_BONUS = 0.10;   // ...lifts the live multiplier by this...
   const COMBO_MAX = 0.50;     // ...up to +50% (the multiplier tops out at 1.50)
-  const DIFF_MIN = 1.0, DIFF_MAX = 1.5;  // difficulty-weight band; the 1.0 floor means never a penalty
+  /* difficulty weight = a problem's MODELED solve-time ÷ the Easy baseline, so XP
+     per MINUTE is ~equal across presets: a harder problem is worth proportionally
+     more, exactly offsetting that you solve fewer of them in a timed game (so
+     choosing a harder mode never costs you XP). It's keyed to the CONFIG's
+     expected time, NOT your actual speed, so it never pays you to dawdle — within
+     any one difficulty, faster + cleaner still earns more. Floor 1.0 (never below
+     Easy), capped. The add/sub coefficient is fit to real solve-time data; mul/div
+     scales faster (mental two-digit multiplication is much slower) — an estimate,
+     refine once there's harder-mode history. */
+  const DIFF_BASE_MS = 900;   // modeled solve floor (read the problem + key the answer)
+  const DIFF_ADD_K = 14;      // +ms per unit of typical addend  (fit to real +/− data)
+  const DIFF_MUL_K = 38;      // +ms per unit of typical factor  (×/÷ scale ~2.7× faster)
+  const DIFF_MIN = 1.0, DIFF_MAX = 3.0;  // weight band; the 1.0 floor means never a penalty vs Easy
 
   /* ---- survival / sudden death ----
      No overall timer: each problem has its OWN shrinking budget, and a single
@@ -250,21 +262,28 @@
     }
     return { base, bonus, bestRun: best, bestMult: comboMultiplier(Math.max(0, best - 1)) };
   }
-  /* A gentle XP weight from the configured operand ranges, so harder settings
-     aren't out-earned by grinding Easy. Uses the midpoint of each enabled op's
-     range as a stand-in for "how big are these numbers", on a log curve
-     calibrated so the built-in Easy preset sits at the 1.0 floor and Normal/Hard
-     reach ~1.2; clamped to [DIFF_MIN, DIFF_MAX]. Pure function of config. */
+  /* Modeled expected solve-time (ms) per problem for a config's ranges — the
+     yardstick the difficulty weight normalizes against. +/− grow gently with
+     addend size; ×/÷ grow faster with factor size. Pure function of config. */
+  function estSolveMs(config) {
+    if (!config || !config.ops) return DIFF_BASE_MS;
+    const a = config.add || {}, m = config.mul || {}, t = [];
+    const mid = (lo, hi) => (Math.max(0, lo || 0) + Math.max(0, hi || 0)) / 2;
+    const addT = DIFF_BASE_MS + DIFF_ADD_K * (mid(a.min1, a.max1) + mid(a.min2, a.max2));
+    const mulT = DIFF_BASE_MS + DIFF_MUL_K * (mid(m.min1, m.max1) + mid(m.min2, m.max2));
+    if (config.ops.add) t.push(addT);
+    if (config.ops.sub) t.push(addT);
+    if (config.ops.mul) t.push(mulT);
+    if (config.ops.div) t.push(mulT);
+    return t.length ? t.reduce((s, x) => s + x, 0) / t.length : DIFF_BASE_MS;
+  }
+  // the built-in Easy preset's modeled time — the 1.0 anchor (Easy and easier => floor)
+  const DIFF_ANCHOR_MS = estSolveMs({ ops: { add: 1, sub: 1, mul: 1, div: 1 }, add: { min1: 1, max1: 20, min2: 1, max2: 20 }, mul: { min1: 1, max1: 9, min2: 1, max2: 9 } });
+  /* XP weight that equalizes expected XP/minute across presets: modeled solve-time
+     ÷ the Easy baseline, clamped to [DIFF_MIN, DIFF_MAX]. Pure function of config. */
   function difficultyWeight(config) {
     if (!config || !config.ops) return DIFF_MIN;
-    const a = config.add || {}, m = config.mul || {}, mids = [];
-    const mid = (lo, hi) => (Math.max(0, lo || 0) + Math.max(0, hi || 0)) / 2;
-    if (config.ops.add || config.ops.sub) mids.push(mid(a.min1, a.max1), mid(a.min2, a.max2));
-    if (config.ops.mul || config.ops.div) mids.push(mid(m.min1, m.max1), mid(m.min2, m.max2));
-    if (!mids.length) return DIFF_MIN;
-    const typical = mids.reduce((s, x) => s + x, 0) / mids.length;
-    const w = 0.75 + 0.122 * Math.log(Math.max(1, typical));
-    return Math.max(DIFF_MIN, Math.min(DIFF_MAX, w));
+    return Math.max(DIFF_MIN, Math.min(DIFF_MAX, estSolveMs(config) / DIFF_ANCHOR_MS));
   }
   /* Total XP for a freshly played session: combo-weighted base × difficulty,
      rounded. `sessionXpInfo` returns the pieces (for the results sheet); `sessionXp`
@@ -1110,7 +1129,7 @@
     dayCounts, daySatisfied, currentStreak, bestStreak, reconcileFreezes,
     defaultProgress, normalizeProgress, xpForSession, awardXp, canBuyFreeze, buyFreeze,
     COMBO_STEP, COMBO_BONUS, COMBO_MAX, DIFF_MIN, DIFF_MAX,
-    comboMultiplier, comboBreakdown, difficultyWeight, sessionXp, sessionXpInfo, survivalXp,
+    comboMultiplier, comboBreakdown, difficultyWeight, estSolveMs, sessionXp, sessionXpInfo, survivalXp,
     pickGhost, ghostScoreAt, ghostMeter, timeRingState, GHOST_METER_RANGE,
     gridFactors, masteryBaseline, cellLevel, masteryGrid,
     cellFreshness, masteryView, masteryProgress, MASTERY_FRESH_DAYS, MASTERY_STALE_DAYS,
