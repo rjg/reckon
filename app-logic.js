@@ -47,8 +47,8 @@
      escalation comes from the clock, not from the number ranges (that's the
      separate "ladder" idea). All pure + unit-tested. */
   const SURVIVAL_START_MS = 8000;  // time budget for the first problem
-  const SURVIVAL_FLOOR_MS = 3000;  // tightest the budget ever gets
-  const SURVIVAL_STEP_MS = 250;    // shaved off the budget per solve (floor at 20 solved)
+  const SURVIVAL_FLOOR_MS = 2000;  // tightest the budget ever gets — low enough that a deep run truly races the clock
+  const SURVIVAL_STEP_MS = 200;    // shaved off the budget per solve (floors at solve 30, so the clock keeps biting far longer)
 
   /* ---- dates (local-time day keys) ---- */
   function dayKey(d) {
@@ -763,7 +763,7 @@
   const TROPHY = {
     PERFECT_MIN: 30,                      // a "flawless" game must be at least this many problems
     QUICKDRAW_MS: 1000, LIGHTNING_MS: 600,
-    HIGH_SCORE: 100, SURVIVAL: 25,
+    HIGH_SCORE: 100, SURVIVAL: 25, SURVIVAL_TIERS: [10, 25, 50, 100],
     VOL: [100, 1000, 10000], STRONG: [25, 100],
     DAY_STREAK: [7, 30, 100], GAUNT_STREAK: 7, GOLDS: 10,
     GRID_PCT: [50, 75, 100], GRID_REACHABLE: 312,   // "green the grid" tiers (% of all reachable cells)
@@ -815,9 +815,14 @@
     { id: 'rec-highscore', group: 'records', icon: 'trophy', name: 'High Score',
       desc: 'Solve ' + TROPHY.HIGH_SCORE + '+ in a single game', reached: s => (s.bestScore || 0) >= TROPHY.HIGH_SCORE,
       progress: s => ({ cur: Math.min(s.bestScore || 0, TROPHY.HIGH_SCORE), target: TROPHY.HIGH_SCORE }) },
-    { id: 'rec-survival', group: 'records', icon: 'skull', name: 'Survivor',
-      desc: 'Reach a survival streak of ' + TROPHY.SURVIVAL, reached: s => (s.bestSurvival || 0) >= TROPHY.SURVIVAL,
-      progress: s => ({ cur: Math.min(s.bestSurvival || 0, TROPHY.SURVIVAL), target: TROPHY.SURVIVAL }) },
+    // survival — a tier ladder (the original Survivor=25 keeps its id so the earned badge survives)
+    ...TROPHY.SURVIVAL_TIERS.map((n, i) => ({
+      id: n === TROPHY.SURVIVAL ? 'rec-survival' : 'rec-survival' + n, group: 'records', icon: 'skull',
+      name: ['Steady Nerve', 'Survivor', 'Unflinching', 'Untouchable'][i],
+      desc: 'Survive ' + n + ' in a row',
+      reached: s => (s.bestSurvival || 0) >= n,
+      progress: s => ({ cur: Math.min(s.bestSurvival || 0, n), target: n }),
+    })),
     // mastery — the fluency grid
     ...TROPHY.STRONG.map((n, i) => ({
       id: 'mas-' + n, group: 'mastery', icon: 'sprout', name: ['Green Thumb', 'Cultivated'][i],

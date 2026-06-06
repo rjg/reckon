@@ -1024,6 +1024,23 @@ test('survivalTimeLimit starts generous, tightens per solve, and floors', () => 
   assert.ok(Z.survivalTimeLimit(0) > Z.SURVIVAL_FLOOR_MS);
   // negative / garbage solved counts clamp to the start budget
   assert.equal(Z.survivalTimeLimit(-5), Z.SURVIVAL_START_MS);
+  // the clock keeps tightening DEEP into a run (it used to plateau at solve 20)
+  assert.ok(Z.survivalTimeLimit(25) < Z.survivalTimeLimit(20), 'still tightening past 20');
+  const floorAt = Math.ceil((Z.SURVIVAL_START_MS - Z.SURVIVAL_FLOOR_MS) / Z.SURVIVAL_STEP_MS);
+  assert.ok(floorAt >= 28, 'floor is reached well past 20 solves (deeper escalation)');
+  assert.equal(Z.survivalTimeLimit(floorAt), Z.SURVIVAL_FLOOR_MS);
+});
+
+test('survival trophies form a 10/25/50/100 ladder, keeping the original Survivor id', () => {
+  const ids = n => new Set(Z.evaluateTrophies({ bestSurvival: n }));
+  assert.deepEqual([...ids(9)].filter(x => x.startsWith('rec-survival')), []);   // nothing below the first rung
+  assert.ok(ids(10).has('rec-survival10') && !ids(10).has('rec-survival'));
+  assert.ok(ids(25).has('rec-survival') && !ids(25).has('rec-survival50'));      // 25 tier keeps the legacy id
+  assert.ok(ids(50).has('rec-survival50') && ids(50).has('rec-survival'));
+  assert.ok(ids(100).has('rec-survival100'));
+  // a deep run earns the whole ladder it has passed
+  assert.deepEqual([...ids(120)].filter(x => x.startsWith('rec-survival')).sort(),
+    ['rec-survival', 'rec-survival10', 'rec-survival100', 'rec-survival50']);
 });
 
 test('recordSurvival banks only a new best (monotonic) and reports it', () => {
