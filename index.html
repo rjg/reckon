@@ -1280,7 +1280,7 @@ const { dayKey, parseKey, addDays,
         canBuyFreeze, buyFreeze, pickGhost, ghostScoreAt, ghostMeter, timeRingState,
         masteryBaseline, masteryGrid, cellFreshness, masteryView, masteryProgress, opStats, accuracy, computeWeakFacts, genProblem, classifyAnswer, OP_ORDER,
         buildGauntlet, gauntletStreak, recordGauntletClear, shuffle, mulberry32,
-        survivalTimeLimit, recordSurvival,
+        survivalTimeLimit, recordSurvival, survivalMilestoneXp,
         gauntletPar, medalForTime, medalTargets, medalCounts, MEDAL_XP,
         RANKS, rankForXp, bestGauntletStreak, TROPHY, TROPHY_DEFS, trophyCounts, reconcileTrophies,
         parseCSV, buildImport, parseBackup, mergeProgress, shouldBackupNudge, escapeHTML,
@@ -1876,7 +1876,10 @@ async function endSurvival(cause){
      write below fails (quota / Private Browsing) */
   const rankBefore=rankForXp(progress.xpLifetime);   // survival XP can rank you up
   const res=recordSurvival(progress,streak);
-  const xpEarned=awardXp(progress,survivalXp(streak,game.config));   // combo-weighted, like a normal game
+  /* base combo curve (== a flawless game of this length) PLUS a one-time bonus for
+     any depth tier this run pushed your best through (res.prev = best before this run) */
+  const milestone=survivalMilestoneXp(res.prev,streak);
+  const xpEarned=awardXp(progress,survivalXp(streak,game.config)+milestone.bonus);
   bumpStats(probs);                           // volume / fastest-answer trophies
   const rankAfter=rankForXp(progress.xpLifetime);
   try{
@@ -1888,7 +1891,8 @@ async function endSurvival(cause){
         detail:'You’ve climbed to a new rank.'});
     if(res.isBest && streak>0)
       enqueueCelebration({icon:'skull',kicker:'Personal best',title:streak+' in a row',
-        detail:'Your longest survival streak yet'+(res.prev>0?' — past best was '+res.prev+'.':'.')});
+        detail:'Your longest survival streak yet'+(res.prev>0?' — past best was '+res.prev+'.':'.')+
+          (milestone.bonus>0?' +'+milestone.bonus+' XP depth bonus!':'')});
   }catch(err){
     console.error('endSurvival: save failed',err);
     toast('Could not save this run');
@@ -1896,7 +1900,7 @@ async function endSurvival(cause){
   $('answer').blur();
   showScreen('home');
   await renderHome().catch(err=>console.error('endSurvival: renderHome failed',err));
-  openSurvivalResults(probs,{streak,best:res.best,isBest:res.isBest,prev:res.prev,cause,xpEarned,miss});
+  openSurvivalResults(probs,{streak,best:res.best,isBest:res.isBest,prev:res.prev,cause,xpEarned,miss,milestone});
 }
 
 /* survival completion — reuses the results sheet, led by the streak you reached. */
@@ -1908,7 +1912,11 @@ function openSurvivalResults(probs,info){
   $('res-score').textContent=info.streak;
   $('res-rate').textContent=(info.isBest&&info.streak>0?'new record!':'best '+info.best)+' · solved in a row';
   let xh='';
-  if(info.xpEarned) xh+='<span class="res-xp">+'+info.xpEarned+' XP</span>';
+  if(info.xpEarned){
+    const mi=info.milestone;   // explain the chunky bonus so the depth payoff is legible
+    const note=(mi&&mi.bonus>0)?' <em>+'+mi.bonus+' for reaching '+mi.tiers.join(' &amp; ')+'</em>':'';
+    xh+='<span class="res-xp">+'+info.xpEarned+' XP'+note+'</span>';
+  }
   const win=info.isBest&&info.streak>0;
   xh+='<span class="res-ghost '+(win?'win':'lose')+'">'+SKULL_SVG_SM+
     (win?'New best · '+info.streak:(info.streak>0?'Survived '+info.streak:'No streak this run'))+'</span>';

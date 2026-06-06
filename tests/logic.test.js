@@ -181,6 +181,16 @@ test('comboMultiplier ramps every COMBO_STEP and caps at +COMBO_MAX', () => {
   assert.equal(Z.comboMultiplier(-3), 1.0);                   // garbage clamps
 });
 
+test('combo ramps fast enough that a short (~10-solve) flawless run reaches the cap', () => {
+  // per-minute parity fix: the cap must sit within a 30s-game's worth of solves, so
+  // short modes (Hyper/Fast) can build a real combo — not just long/easy ones. A
+  // bigger COMBO_STEP would put the cap out of their reach and quietly hand
+  // high-volume modes the higher XP/min the difficulty weight is meant to equalize.
+  const capRun = Z.COMBO_STEP * Math.round(Z.COMBO_MAX / Z.COMBO_BONUS);
+  assert.ok(capRun <= 10, 'combo cap reachable within ~10 clean solves, got ' + capRun);
+  assert.ok(Math.abs(Z.comboMultiplier(capRun) - (1 + Z.COMBO_MAX)) < 1e-9);
+});
+
 test('sessionXp: a flawless run out-earns a fumbly one of equal length, and never dips below the score', () => {
   const n = 40;
   const flawless = probs(Array(n).fill(true));
@@ -1137,6 +1147,37 @@ test('recordSurvival banks only a new best (monotonic) and reports it', () => {
   r = Z.recordSurvival(p, 12);                // beating it is
   assert.deepEqual(r, { best: 12, isBest: true, prev: 7 });
   assert.equal(p.survivalBest, 12);
+});
+
+test('survivalMilestoneXp pays a one-time bonus for each depth tier a new best crosses', () => {
+  const XP = Z.SURVIVAL_TIER_XP;
+  // a first run straight to 30 crosses the 10 and 25 tiers
+  let m = Z.survivalMilestoneXp(0, 30);
+  assert.deepEqual(m.tiers, [10, 25]);
+  assert.equal(m.bonus, XP[10] + XP[25]);
+  // climbing from a prior best of 25 to 60 crosses only the 50 tier
+  m = Z.survivalMilestoneXp(25, 60);
+  assert.deepEqual(m.tiers, [50]);
+  assert.equal(m.bonus, XP[50]);
+  // a run that doesn't beat the best pays nothing — anti-farm, NOT per-run
+  assert.deepEqual(Z.survivalMilestoneXp(40, 25), { bonus: 0, tiers: [] });
+  assert.deepEqual(Z.survivalMilestoneXp(50, 50), { bonus: 0, tiers: [] });   // tying isn't crossing
+  // tier boundaries are inclusive
+  assert.deepEqual(Z.survivalMilestoneXp(0, 10).tiers, [10]);
+  assert.deepEqual(Z.survivalMilestoneXp(0, 9).tiers, []);
+  // a deep first run can collect the whole ladder at once
+  assert.deepEqual(Z.survivalMilestoneXp(0, 100).tiers, [10, 25, 50, 100]);
+  assert.equal(Z.survivalMilestoneXp(0, 100).bonus, XP[10] + XP[25] + XP[50] + XP[100]);
+  assert.deepEqual(Z.survivalMilestoneXp(-5, -5), { bonus: 0, tiers: [] });   // garbage clamps
+});
+
+test('survival milestone tiers stay in lockstep with the survival trophy ladder, XP ascending', () => {
+  assert.deepEqual(Z.SURVIVAL_TIERS, Z.TROPHY.SURVIVAL_TIERS);   // one source of truth
+  let prev = 0;
+  for (const t of Z.SURVIVAL_TIERS) {
+    const xp = Z.SURVIVAL_TIER_XP[t];
+    assert.ok(xp > prev, 'tier ' + t + ' XP must climb'); prev = xp;
+  }
 });
 
 test('survivalBest survives normalize and takes the max on merge', () => {

@@ -35,9 +35,14 @@
                       that RESETS on any miss, so accuracy (not just volume) pays.
        · difficulty — bigger operand ranges earn a gentle bonus (floor 1.0, never a
                       penalty), so challenge isn't out-earned by grinding Easy. */
-  const COMBO_STEP = 5;       // every N clean solves in a row...
+  const COMBO_STEP = 2;       // every N clean solves in a row...
   const COMBO_BONUS = 0.10;   // ...lifts the live multiplier by this...
   const COMBO_MAX = 0.50;     // ...up to +50% (the multiplier tops out at 1.50)
+  /* STEP is deliberately small: the multiplier hits its cap in COMBO_STEP·(MAX/BONUS)
+     = 10 clean solves, so even a 30s sprint can build a full combo. A larger step
+     put the cap out of reach of short modes, which (because combo scales with
+     volume) quietly handed long/easy games the higher XP-per-minute the difficulty
+     weight was meant to equalize — see estSolveMs/difficultyWeight below. */
   /* difficulty weight = a problem's MODELED solve-time ÷ the Easy baseline, so XP
      per MINUTE is ~equal across presets: a harder problem is worth proportionally
      more, exactly offsetting that you solve fewer of them in a timed game (so
@@ -61,6 +66,12 @@
   const SURVIVAL_START_MS = 8000;  // time budget for the first problem
   const SURVIVAL_FLOOR_MS = 2000;  // tightest the budget ever gets — low enough that a deep run truly races the clock
   const SURVIVAL_STEP_MS = 200;    // shaved off the budget per solve (floors at solve 30, so the clock keeps biting far longer)
+  /* depth milestones — reaching each for the FIRST time (a new best that crosses it)
+     pays a one-time, flat bonus on top of the per-solve combo curve. This is what
+     makes a deep run worth the sudden-death risk; the tiers double as the survival
+     trophy ladder (TROPHY.SURVIVAL_TIERS reuses this array). */
+  const SURVIVAL_TIERS = [10, 25, 50, 100];
+  const SURVIVAL_TIER_XP = { 10: 50, 25: 100, 50: 200, 100: 400 };
 
   /* ---- dates (local-time day keys) ---- */
   function dayKey(d) {
@@ -351,6 +362,20 @@
     const isBest = streak > prev;
     if (isBest) progress.survivalBest = streak;
     return { best: Math.max(prev, streak), isBest, prev };
+  }
+  /* One-time bonus for pushing your survival best through new depth tiers. Pays the
+     flat SURVIVAL_TIER_XP for every tier in (prevBest, streak] — so it only fires on
+     a run that sets a new best, and each tier pays exactly once in a lifetime
+     (mirrors the gauntlet's pay-only-on-upgrade rule; not farmable, even on a
+     trivial config). The base survivalXp still rewards every run; this is the extra
+     payoff for reaching a new height. Pure; returns {bonus, tiers}. */
+  function survivalMilestoneXp(prevBest, streak) {
+    prevBest = Math.max(0, prevBest | 0); streak = Math.max(0, streak | 0);
+    let bonus = 0; const tiers = [];
+    for (const t of SURVIVAL_TIERS) {
+      if (t > prevBest && t <= streak) { bonus += SURVIVAL_TIER_XP[t] || 0; tiers.push(t); }
+    }
+    return { bonus: bonus, tiers: tiers };
   }
 
   /* ---- ghost (steady pace = your best rate for this preset) ---- */
@@ -818,7 +843,7 @@
   const TROPHY = {
     QUICKDRAW_MS: 1000, LIGHTNING_MS: 600,
     HIGH_SCORE: 100, HIGH_SCORE_MAX_SEC: 120,    // 100-in-a-game must be a standard-length game, not a stretched custom timer
-    SURVIVAL: 25, SURVIVAL_TIERS: [10, 25, 50, 100],
+    SURVIVAL: 25, SURVIVAL_TIERS: SURVIVAL_TIERS,   // single source of truth (defined up in the survival section)
     FLAWLESS_TIERS: [15, 30, 50],                // no-mistake game sizes — the visible accuracy ladder
     VOL: [100, 1000, 10000], STRONG: [25, 100],
     DAY_STREAK: [7, 30, 100], GAUNT_STREAK: 7, GOLDS: 10, GOLD_TIERS: [10, 25, 50, 100],
@@ -1155,7 +1180,8 @@
     PLUS, MINUS, TIMES, DIV, OP_ORDER,
     DAILY_GOAL, FREEZE_COST, MAX_FREEZES,
     GAUNTLET_SIZE, GAUNTLET_REWARD, GAUNTLET_WINDOW_DAYS,
-    SURVIVAL_START_MS, SURVIVAL_FLOOR_MS, SURVIVAL_STEP_MS, survivalTimeLimit, recordSurvival,
+    SURVIVAL_START_MS, SURVIVAL_FLOOR_MS, SURVIVAL_STEP_MS, SURVIVAL_TIERS, SURVIVAL_TIER_XP,
+    survivalTimeLimit, recordSurvival, survivalMilestoneXp,
     dayKey, parseKey, addDays,
     answerFor, canonFact, factKey, genProblem, classifyAnswer,
     dayCounts, daySatisfied, currentStreak, bestStreak, reconcileFreezes,
