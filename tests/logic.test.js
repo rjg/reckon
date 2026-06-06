@@ -145,10 +145,12 @@ test('buyFreeze enforces cost (1000) and the max-held cap (2)', () => {
   assert.equal(p.xp, 1500); assert.equal(p.freezes, 1);
   assert.equal(Z.buyFreeze(p), true);
   assert.equal(p.xp, 500); assert.equal(p.freezes, 2);
+  assert.equal(p.freezesBought, 2);                    // lifetime tally counts every purchase...
   assert.equal(Z.canBuyFreeze(p), false);              // at cap, even if affordable
   p.xp = 5000;
   assert.equal(Z.buyFreeze(p), false);
   assert.equal(p.freezes, 2);
+  assert.equal(p.freezesBought, 2);                    // ...and a failed buy doesn't bump it
 });
 
 test('normalizeProgress repairs partial/garbage records', () => {
@@ -157,6 +159,9 @@ test('normalizeProgress repairs partial/garbage records', () => {
   assert.equal(fixed.xp, 0);
   assert.equal(fixed.freezes, Z.MAX_FREEZES);           // clamped to cap
   assert.deepEqual(fixed.freezeDays, {});
+  // a held freeze proves a past purchase, so freezesBought is seeded from it (credits existing savers)
+  assert.equal(Z.normalizeProgress({ freezes: 2 }).freezesBought, 2);
+  assert.equal(Z.normalizeProgress({ freezes: 1, freezesBought: 5 }).freezesBought, 5);  // explicit count wins when higher
 });
 
 /* ===================== skill-weighted XP ===================== */
@@ -839,6 +844,7 @@ test('mergeProgress keeps the better of each side (non-destructive)', () => {
   assert.equal(m.xp, 100);                 // max
   assert.equal(m.xpLifetime, 250);         // max
   assert.equal(m.freezes, 2);              // max (within cap)
+  assert.equal(m.freezesBought, 2);        // lifetime tally takes the max (seeded from held freezes here)
   assert.deepEqual(m.freezeDays, { d1: true, d2: true });        // union
   assert.deepEqual(m.gauntletClears, { day: 25000, day2: 9000 }); // best (min ms) per day
   // restoring into an empty profile adopts the backup's values
@@ -908,10 +914,12 @@ test('evaluateTrophies earns the right emblems per system, with thresholds', () 
   // day streak: 30 clears the 7 and 30 tiers but not 100
   s = ids({ bestDayStreak: 30 });
   assert.ok(s.has('streak-7') && s.has('streak-30') && !s.has('streak-100'));
-  // gauntlet medals / clears / streak
+  // gauntlet medals / clears / streak — golds are a 10/25/50/100 ladder (10 keeps the id 'gaunt-gold10')
   assert.ok(ids({ totalGauntlets: 1 }).has('gaunt-first'));
   assert.ok(ids({ golds: 1 }).has('gaunt-gold') && !ids({ golds: 1 }).has('gaunt-gold10'));
-  assert.ok(ids({ golds: 10 }).has('gaunt-gold10'));
+  assert.ok(ids({ golds: 10 }).has('gaunt-gold10') && !ids({ golds: 10 }).has('gaunt-gold25'));
+  assert.ok(ids({ golds: 50 }).has('gaunt-gold25') && ids({ golds: 50 }).has('gaunt-gold50') && !ids({ golds: 50 }).has('gaunt-gold100'));
+  assert.ok(ids({ golds: 100 }).has('gaunt-gold100'));
   assert.ok(ids({ bestGauntletStreak: 7 }).has('gaunt-streak7'));
   // volume
   s = ids({ totalProblems: 1000 });
@@ -920,15 +928,19 @@ test('evaluateTrophies earns the right emblems per system, with thresholds', () 
   assert.deepEqual([...ids({ fastestCorrectMs: 0 })], []);
   assert.ok(ids({ fastestCorrectMs: 800 }).has('rec-quickdraw') && !ids({ fastestCorrectMs: 800 }).has('rec-lightning'));
   assert.ok(ids({ fastestCorrectMs: 500 }).has('rec-lightning'));
-  assert.ok(ids({ bestScore: 100 }).has('rec-highscore'));
+  // high score is gated on a STANDARD-length game (bestScoreStd), so a stretched custom timer can't farm it
+  assert.ok(ids({ bestScoreStd: 100 }).has('rec-highscore'));
+  assert.ok(!ids({ bestScore: 100 }).has('rec-highscore'));   // a 100 in a non-standard game does NOT qualify
+  // accuracy ladder (the old hidden Flawless, now a visible 15/30/50 records ladder)
+  s = ids({ bestFlawless: 30 });
+  assert.ok(s.has('rec-flawless15') && s.has('rec-flawless30') && !s.has('rec-flawless50'));
   // mastery
   s = ids({ strongFacts: 100, tableMastered: true, opsWithStrong: 4 });
   assert.ok(s.has('mas-25') && s.has('mas-100') && s.has('mas-table') && s.has('mas-allops'));
   assert.ok(!ids({ opsWithStrong: 3 }).has('mas-allops'));
-  // secret
-  assert.ok(ids({ perfectGame: true }).has('sec-flawless'));
+  // secret — Insured rewards STOCKING a freeze (preparedness), not missing a day
   assert.ok(ids({ nightOwl: true }).has('sec-nightowl'));
-  assert.ok(ids({ usedFreeze: true }).has('sec-saved'));
+  assert.ok(ids({ freezesBought: 1 }).has('sec-saved'));
 });
 
 test('every TROPHY_DEF is well-formed and secret trophies are flagged', () => {
@@ -965,7 +977,7 @@ test('reconcileTrophies is monotonic: earns once, never un-earns, returns only t
 test('trophyCounts reports earned-of-total, ignoring stale ids', () => {
   const p = Z.defaultProgress();
   assert.deepEqual(Z.trophyCounts(p), { earned: 0, total: Z.TROPHY_TOTAL });
-  Z.reconcileTrophies(p, { totalGauntlets: 1, bestScore: 100 }, 1);
+  Z.reconcileTrophies(p, { totalGauntlets: 1, bestScoreStd: 100 }, 1);
   assert.deepEqual(Z.trophyCounts(p), { earned: 2, total: Z.TROPHY_TOTAL });
   p.trophies['no-such-trophy'] = 5;                       // an id from a future/older build is not counted
   assert.equal(Z.trophyCounts(p).earned, 2);

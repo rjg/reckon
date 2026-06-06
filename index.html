@@ -2530,11 +2530,12 @@ function computeCheapStats(sessions,now){
   const fd=progress.freezeDays||{};
   const cur=currentStreak(counts,fd,DAILY_GOAL,new Date(now));
   const bestDay=Math.max(bestStreak(counts,fd,DAILY_GOAL),cur);
-  let bestScore=0, perfectGame=false, nightOwl=false;
+  let bestScore=0, bestScoreStd=0, bestFlawless=0, nightOwl=false;
   for(const s of sessions){
-    const sc=s.score|0;
+    const sc=s.score|0, dur=s.durationSec|0;
     if(sc>bestScore) bestScore=sc;
-    if((s.errorCount|0)===0 && sc>=TROPHY.PERFECT_MIN) perfectGame=true;
+    if(dur>0 && dur<=TROPHY.HIGH_SCORE_MAX_SEC && sc>bestScoreStd) bestScoreStd=sc;   // High Score must be a standard-length game
+    if((s.errorCount|0)===0 && sc>bestFlawless) bestFlawless=sc;                       // largest no-mistake game (accuracy ladder)
     const h=new Date(s.endedAt).getHours();
     if(h>=0 && h<5) nightOwl=true;
   }
@@ -2544,8 +2545,8 @@ function computeCheapStats(sessions,now){
     xpLifetime:progress.xpLifetime||0,
     bestDayStreak:bestDay,
     totalGames:sessions.length,
-    bestScore, perfectGame, nightOwl,
-    usedFreeze:Object.keys(progress.freezeDays||{}).length>0,
+    bestScore, bestScoreStd, bestFlawless, nightOwl,
+    freezesBought:progress.freezesBought||0,
     totalGauntlets:Object.keys(progress.gauntletClears||{}).length,
     bestGauntletStreak:bestGauntletStreak(progress.gauntletClears),
     golds:mc.gold, silvers:mc.silver, bronzes:mc.bronze,

@@ -188,7 +188,7 @@
   /* ---- progress / XP ---- */
   function defaultProgress() {
     return {
-      xp: 0, xpLifetime: 0, freezes: 0, freezeDays: {}, gauntletClears: {}, gauntletMedals: {},
+      xp: 0, xpLifetime: 0, freezes: 0, freezesBought: 0, freezeDays: {}, gauntletClears: {}, gauntletMedals: {},
       survivalBest: 0,
       trophies: {}, trophiesSeenAt: 0, stats: { probs: 0, fastestMs: 0 }, v: 1,
     };
@@ -208,6 +208,9 @@
       xp: Math.max(0, p.xp | 0),
       xpLifetime: Math.max(0, p.xpLifetime | 0),
       freezes: Math.max(0, Math.min(MAX_FREEZES, p.freezes | 0)),
+      // freezes only ever come from buying, so a held freeze proves a past purchase — seed the
+      // lifetime "bought" counter from whatever's held, so existing savers earn the Insured emblem
+      freezesBought: Math.max(p.freezesBought | 0, p.freezes | 0),
       freezeDays: (p.freezeDays && typeof p.freezeDays === 'object') ? p.freezeDays : {},
       gauntletClears: (p.gauntletClears && typeof p.gauntletClears === 'object') ? p.gauntletClears : {},
       gauntletMedals: (p.gauntletMedals && typeof p.gauntletMedals === 'object') ? p.gauntletMedals : {},
@@ -289,6 +292,7 @@
   function buyFreeze(progress) {
     if (!canBuyFreeze(progress)) return false;
     progress.xp -= FREEZE_COST; progress.freezes++;
+    progress.freezesBought = (progress.freezesBought | 0) + 1;   // lifetime tally (drives the Insured emblem; never decremented)
     return true;
   }
 
@@ -761,11 +765,12 @@
 
   /* trophy thresholds — pulled out so tests and the UI can reference them. */
   const TROPHY = {
-    PERFECT_MIN: 30,                      // a "flawless" game must be at least this many problems
     QUICKDRAW_MS: 1000, LIGHTNING_MS: 600,
-    HIGH_SCORE: 100, SURVIVAL: 25, SURVIVAL_TIERS: [10, 25, 50, 100],
+    HIGH_SCORE: 100, HIGH_SCORE_MAX_SEC: 120,    // 100-in-a-game must be a standard-length game, not a stretched custom timer
+    SURVIVAL: 25, SURVIVAL_TIERS: [10, 25, 50, 100],
+    FLAWLESS_TIERS: [15, 30, 50],                // no-mistake game sizes — the visible accuracy ladder
     VOL: [100, 1000, 10000], STRONG: [25, 100],
-    DAY_STREAK: [7, 30, 100], GAUNT_STREAK: 7, GOLDS: 10,
+    DAY_STREAK: [7, 30, 100], GAUNT_STREAK: 7, GOLDS: 10, GOLD_TIERS: [10, 25, 50, 100],
     GRID_PCT: [50, 75, 100], GRID_REACHABLE: 312,   // "green the grid" tiers (% of all reachable cells)
   };
   const fastWithin = (s, ms) => (s.fastestCorrectMs > 0 && s.fastestCorrectMs <= ms);
@@ -794,9 +799,13 @@
       desc: 'Clear your first daily gauntlet', reached: s => (s.totalGauntlets || 0) >= 1 },
     { id: 'gaunt-gold', group: 'gauntlet', icon: 'medal', name: 'Struck Gold',
       desc: 'Earn a gold medal', reached: s => (s.golds || 0) >= 1 },
-    { id: 'gaunt-gold10', group: 'gauntlet', icon: 'medal', name: 'Gold Hoard',
-      desc: 'Collect ' + TROPHY.GOLDS + ' gold medals', reached: s => (s.golds || 0) >= TROPHY.GOLDS,
-      progress: s => ({ cur: Math.min(s.golds || 0, TROPHY.GOLDS), target: TROPHY.GOLDS }) },
+    // gold collection — a tier ladder (the original Gold Hoard=10 keeps its id)
+    ...TROPHY.GOLD_TIERS.map((n, i) => ({
+      id: n === TROPHY.GOLDS ? 'gaunt-gold10' : 'gaunt-gold' + n, group: 'gauntlet', icon: 'medal',
+      name: ['Gold Hoard', 'Gold Rush', 'Midas Touch', 'El Dorado'][i],
+      desc: 'Collect ' + n + ' gold medals',
+      reached: s => (s.golds || 0) >= n, progress: s => ({ cur: Math.min(s.golds || 0, n), target: n }),
+    })),
     { id: 'gaunt-streak7', group: 'gauntlet', icon: 'bolt', name: 'Relentless',
       desc: 'Clear the gauntlet ' + TROPHY.GAUNT_STREAK + ' days running',
       reached: s => (s.bestGauntletStreak || 0) >= TROPHY.GAUNT_STREAK,
@@ -813,8 +822,15 @@
     { id: 'rec-lightning', group: 'records', icon: 'bolt', name: 'Lightning',
       desc: 'Answer correctly in under 0.6s', reached: s => fastWithin(s, TROPHY.LIGHTNING_MS) },
     { id: 'rec-highscore', group: 'records', icon: 'trophy', name: 'High Score',
-      desc: 'Solve ' + TROPHY.HIGH_SCORE + '+ in a single game', reached: s => (s.bestScore || 0) >= TROPHY.HIGH_SCORE,
-      progress: s => ({ cur: Math.min(s.bestScore || 0, TROPHY.HIGH_SCORE), target: TROPHY.HIGH_SCORE }) },
+      desc: 'Solve ' + TROPHY.HIGH_SCORE + '+ in a standard game', reached: s => (s.bestScoreStd || 0) >= TROPHY.HIGH_SCORE,
+      progress: s => ({ cur: Math.min(s.bestScoreStd || 0, TROPHY.HIGH_SCORE), target: TROPHY.HIGH_SCORE }) },
+    // accuracy — a visible ladder of clean (no-miss) games (was a single hidden "Flawless" secret)
+    ...TROPHY.FLAWLESS_TIERS.map((n, i) => ({
+      id: 'rec-flawless' + n, group: 'records', icon: 'sparkle',
+      name: ['Spotless', 'Flawless', 'Immaculate'][i],
+      desc: 'Finish a ' + n + '+ problem game with no mistakes',
+      reached: s => (s.bestFlawless || 0) >= n, progress: s => ({ cur: Math.min(s.bestFlawless || 0, n), target: n }),
+    })),
     // survival — a tier ladder (the original Survivor=25 keeps its id so the earned badge survives)
     ...TROPHY.SURVIVAL_TIERS.map((n, i) => ({
       id: n === TROPHY.SURVIVAL ? 'rec-survival' : 'rec-survival' + n, group: 'records', icon: 'skull',
@@ -846,12 +862,10 @@
       desc: 'Make all four tables fully green', reached: s => (s.tablesGreen || 0) >= 4,
       progress: s => ({ cur: Math.min(s.tablesGreen || 0, 4), target: 4 }) },
     // secret — hidden until earned (the surprise)
-    { id: 'sec-flawless', group: 'secret', icon: 'sparkle', name: 'Flawless', secret: true,
-      desc: 'Finish a ' + TROPHY.PERFECT_MIN + '+ problem game with no mistakes', reached: s => !!s.perfectGame },
     { id: 'sec-nightowl', group: 'secret', icon: 'moon', name: 'Night Owl', secret: true,
       desc: 'Play between midnight and 5am', reached: s => !!s.nightOwl },
-    { id: 'sec-saved', group: 'secret', icon: 'shield', name: 'Saved', secret: true,
-      desc: 'Let a streak freeze rescue your streak', reached: s => !!s.usedFreeze },
+    { id: 'sec-saved', group: 'secret', icon: 'shield', name: 'Insured', secret: true,
+      desc: 'Stock a streak freeze', reached: s => (s.freezesBought || 0) >= 1 },
   ]);
   const TROPHY_TOTAL = TROPHY_DEFS.length;
   const TROPHY_BY_ID = {};
@@ -1055,7 +1069,8 @@
     const fastestMs = [cur.stats.fastestMs, inc.stats.fastestMs].filter(x => x > 0).sort((a, b) => a - b)[0] || 0;
     return {
       xp: Math.max(cur.xp, inc.xp), xpLifetime: Math.max(cur.xpLifetime, inc.xpLifetime),
-      freezes: Math.max(cur.freezes, inc.freezes), freezeDays, gauntletClears, gauntletMedals,
+      freezes: Math.max(cur.freezes, inc.freezes), freezesBought: Math.max(cur.freezesBought || 0, inc.freezesBought || 0),
+      freezeDays, gauntletClears, gauntletMedals,
       survivalBest: Math.max(cur.survivalBest, inc.survivalBest),
       trophies, trophiesSeenAt: Math.max(cur.trophiesSeenAt, inc.trophiesSeenAt),
       stats: { probs, fastestMs }, v: 1,
